@@ -1,0 +1,79 @@
+name: habs-runtime
+version: 0.0.1
+
+license: BSD3
+license-file: LICENSE
+author: Nikolaos Bezirgiannis
+maintainer: Nikolaos Bezirgiannis <bezirgia@cwi.nl>
+copyright: Copyright (c) 2013-2016, Envisage Consortium
+homepage: http://abs-models.org
+bug-reports: https://github.com/abstools/habs-runtime/issues
+
+stability: provisional
+tested-with: GHC == 7.8.4, GHC == 7.10.1, GHC == 7.10.2, GHC == 7.10.3
+build-type: Simple
+cabal-version: >= 1.8
+
+category: Concurrency, Distributed Computing
+synopsis: The runtime of the Haskell-ABS (habs) backend as a library
+description:
+  The runtime of the Haskell-ABS (habs) backend as a library.
+  See also the <http://abstools.github.io/habs-runtime/bench-results.html benchmark comparison> of different Haskell implementations of the ABS primitives.
+
+extra-source-files:
+  README.md
+
+source-repository head
+  type: git
+  location: git://github.com/abstools/habs-runtime.git
+  branch: master
+
+library
+  build-depends:
+    -- base<=4.6 (i.e. GHC<=7.6.3) not supported because of no `tryReadMVar`
+    base >= 4.7 && < 5,
+    -- for the StateT monad transformer threaded ontop of coroutines
+    transformers>=0.4,
+    -- containers-0.5.0.0 introduces strict containers, comes bundled with ghc>=7.6.3
+    containers>=0.5.0.0,
+    -- for lifting exceptions to ABS monad 
+    -- and thus supporting the exceptions extension for ABS
+    exceptions>=0.6.1,
+    cmdargs
+  exposed-modules:
+    -- data structures used by the Runtime
+    ABS.Runtime.Base,
+    -- runtime building-blocks that reflect the ABS primitives
+    ABS.Runtime.Prim,
+    -- cmdline options for the runtime
+    ABS.Runtime.CmdOpt    
+  ghc-options: -Wall -fno-warn-orphans
+  hs-source-dirs: src
+
+-- TEST SUITE
+-------------
+
+test-suite prims
+  type: exitcode-stdio-1.0
+  main-is: prims.hs
+  build-depends:
+    base,
+    habs-runtime,
+    tasty,
+    tasty-hunit,
+    tasty-html
+  hs-source-dirs: tests
+
+
+-- BENCHMARKS
+-------------
+
+benchmark stub
+  type: exitcode-stdio-1.0
+  main-is: stub.hs
+  build-depends:
+    base,
+    habs-runtime,
+    criterion
+  hs-source-dirs: bench
+  ghc-options: -O2
