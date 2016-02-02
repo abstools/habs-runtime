@@ -61,12 +61,16 @@ test-suite prims
     habs-runtime,
     tasty,
     tasty-hunit,
-    tasty-html
+    tasty-html,
+    transformers,
+    -- for capturing&testing stdout
+    silently
+  ghc-options: -fno-ignore-asserts -threaded "-with-rtsopts=-N2"
   hs-source-dirs: tests
 
 
 -- BENCHMARKS
--------------
+-------------p
 
 benchmark stub
   type: exitcode-stdio-1.0
