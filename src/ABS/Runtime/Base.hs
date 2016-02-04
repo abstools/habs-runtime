@@ -2,8 +2,8 @@
 -- | All the types and datastructures used in the ABS-Haskell runtime
 module ABS.Runtime.Base where
 
-
-import Control.Concurrent.MVar (MVar)
+import Control.Concurrent.MVar (MVar) -- futures
+import Control.Concurrent.STM.TQueue (TQueue) -- mailbox
 import Data.IORef (IORef)
 import Control.Monad.Trans.Cont (ContT)
 
@@ -23,16 +23,20 @@ instance Show (Fut a) where
 -- 1) a reference to its cog
 -- 2) its attributes placed in a mutable variable=IORef
 -- NB: we deviate from ABS by not providing ordering of object-refs
-data Obj contents = Obj Cog (IORef contents)
+data Obj contents = Obj (IORef contents) !Cog 
+
+-- no need for Eq (Obj a). it is done by boilerplate generation of instance Eq I
+-- instance Eq I where
+--    I (Obj _ ioref1) == I (Obj _ ioref2) = ioref1 == ioref2
+-- no need for Show (Obj a). show is done by the exposed interface-wrapper
+-- instance Show I where
+--    show _ = "I" 
 
 -- | a COG reference is a mutex and a sleep table.
 --
 -- a process becomes active by acquiring&holding the COG's lock.
 -- a process deactivates (by suspend,await) by releasing the lock.
-data Cog = Cog (MVar ()) (IORef SleepTable)
-
-instance Eq (Obj a) where
-    (Obj _ ioref1) == (Obj _ ioref2) = ioref1 == ioref2
+data Cog = Cog (IORef SleepTable) (TQueue (() -> ABS ()))
 
 instance Eq Cog where
     (Cog token1 _) == (Cog token2 _) = token1 == token2
@@ -48,9 +52,6 @@ type ABS a = ContT () IO a
 class Sub sub sup where
     -- | The upcasting method from a subtype to a supertype
     up :: sub -> sup
-
-
--- TODO: define also exceptions here later
 
 
 

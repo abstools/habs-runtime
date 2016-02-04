@@ -18,7 +18,7 @@ category: Concurrency, Distributed Computing
 synopsis: The runtime of the Haskell-ABS (habs) backend as a library
 description:
   The runtime of the Haskell-ABS (habs) backend as a library.
-  See also the <http://abstools.github.io/habs-runtime/bench-results.html benchmark comparison> of different Haskell implementations of the ABS primitives.
+  See also the <http://abstools.github.io/habs-runtime/bench-cog-results.html benchmark comparison> of different Haskell implementations of the ABS primitives.
 
 extra-source-files:
   README.md
@@ -32,13 +32,12 @@ library
   build-depends:
     -- base<=4.6 (i.e. GHC<=7.6.3) not supported because of no `tryReadMVar`
     base >= 4.7 && < 5,
-    -- for the StateT monad transformer threaded ontop of coroutines
+    -- for the continuation ContT monad transformer
     transformers>=0.4,
-    -- containers-0.5.0.0 introduces strict containers, comes bundled with ghc>=7.6.3
-    containers>=0.5.0.0,
-    -- for lifting exceptions to ABS monad 
-    -- and thus supporting the exceptions extension for ABS
-    exceptions>=0.6.1,
+    -- we use STM's TQueue for our mailbox datastructure
+    stm>=2.4,
+    -- for lifting exceptions to ABS monad and so to implement the exceptions extension for ABS
+    -- exceptions>=0.6.1,
     cmdargs
   exposed-modules:
     -- data structures used by the Runtime
@@ -53,9 +52,9 @@ library
 -- TEST SUITE
 -------------
 
-test-suite prims
+test-suite unit
   type: exitcode-stdio-1.0
-  main-is: prims.hs
+  main-is: unit.hs
   build-depends:
     base,
     habs-runtime,
@@ -65,19 +64,33 @@ test-suite prims
     transformers,
     -- for capturing&testing stdout
     silently
-  ghc-options: -fno-ignore-asserts -threaded "-with-rtsopts=-N2"
+  ghc-options: -fno-ignore-asserts -threaded "-with-rtsopts=-N4"
   hs-source-dirs: tests
 
 
 -- BENCHMARKS
--------------p
+-------------
 
-benchmark stub
+benchmark cog
   type: exitcode-stdio-1.0
-  main-is: stub.hs
+  main-is: cog.hs
   build-depends:
     base,
     habs-runtime,
+    transformers,
+    unagi-chan,
+    stm,
     criterion
   hs-source-dirs: bench
-  ghc-options: -O2
+  ghc-options: -O -fno-ignore-asserts -threaded "-with-rtsopts=-N4"
+
+benchmark future
+  type: exitcode-stdio-1.0
+  main-is: future.hs
+  build-depends:
+    base,
+    habs-runtime,
+    stm,
+    criterion
+  hs-source-dirs: bench
+  ghc-options: -O -fno-ignore-asserts -threaded "-with-rtsopts=-N4"
