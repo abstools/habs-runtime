@@ -46,6 +46,8 @@ library
     ABS.Runtime.Prim,
     -- cmdline options for the runtime
     ABS.Runtime.CmdOpt    
+  other-modules:
+    ABS.Runtime.TQueue
   ghc-options: -Wall -fno-warn-orphans
   hs-source-dirs: src
 

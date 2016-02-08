@@ -8,10 +8,11 @@ module ABS.Runtime.Prim
 
 import ABS.Runtime.Base
 import ABS.Runtime.CmdOpt
+import ABS.Runtime.TQueue (TQueue (..), newTQueueIO, writeTQueue, readTQueue)
 
 import Control.Concurrent (newEmptyMVar, isEmptyMVar, putMVar, readMVar, forkIO, runInUnboundThread)
-import Control.Concurrent.STM (atomically)    
-import Control.Concurrent.STM.TQueue (newTQueueIO, writeTQueue, readTQueue)
+import Control.Concurrent.STM (atomically, readTVar, readTVarIO, writeTVar)    
+
 import Control.Monad.Trans.Cont (evalContT, callCC)
 import Control.Monad.IO.Class (liftIO)
 import Data.IORef (newIORef, readIORef, writeIORef)
@@ -32,11 +33,38 @@ null = Obj (unsafePerformIO $ newIORef undefined) -- its object contents
            (error "call to null object") -- its COG
 
 {-# INLINE suspend #-}
+-- | Optimized suspend by avoiding capturing current-continuation if the method will be reactivated immediately:
+-- implemented by inlining back' function and using a custom TQueue that exposes the otherwise abstract datatype TQueue.
 suspend :: Obj this -> ABS ()
-suspend (Obj _ thisCog@(Cog _ thisMailBox)) = 
-    callCC (\ k -> do
-              liftIO $ atomically $ writeTQueue thisMailBox k
-              back' thisCog)
+suspend (Obj _ (Cog thisSleepTable thisMailBox@(TQueue tread twrite))) = do
+  (mwoken, st') <- liftIO $ findWoken =<< readIORef thisSleepTable                                                 
+  case mwoken of
+    Nothing -> do
+      xs <- liftIO $ readTVarIO tread
+      case xs of
+        (k':ks') -> callCC (\ k -> do
+                          liftIO $ do
+                                 atomically $ writeTQueue thisMailBox k
+                                 atomically $ writeTVar tread ks'
+                          k' ())
+        [] -> do 
+          ys <- liftIO $ readTVarIO twrite
+          case ys of
+            [] -> return ()       -- continue
+            _  -> callCC (\ k -> do
+                          k' <- liftIO $ atomically $ do
+                                 ws <- readTVar twrite
+                                 case reverse (k:ws) of
+                                   [] -> error "readTQueue"
+                                   (z:zs) -> do writeTVar twrite []
+                                                writeTVar tread zs
+                                                return z
+                          k' ())
+    Just woken -> callCC (\ k -> do
+                           liftIO $ do
+                             atomically $ writeTQueue thisMailBox k                
+                             writeIORef thisSleepTable st' -- the sleep-table was modified, so write it back
+                           woken ())
 
 {-# INLINE back' #-}
 back' :: Cog -> ABS ()
