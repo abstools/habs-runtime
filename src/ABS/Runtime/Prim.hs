@@ -188,11 +188,7 @@ println = liftIO . putStrLn
 {-# INLINE readln #-}
 -- | I decided to be a statement and not a built-in function for keeping functions pure.
 readln :: ABS String
-readln = liftIO readLn
-
--- {-# INLINE toString #-}
--- toString :: Show a => a -> String
--- toString = show
+readln = liftIO getLine
 
 while' :: ABS Bool -> (ABS () -> ABS ()) -> ABS () -> ABS ()
 while' predAction loopAction k = do

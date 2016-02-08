@@ -6,6 +6,7 @@ dist/
 *.dyn_hi
 *.th.hs
 *.hcr
+.imports
 
 # CABAL
 .cabal-sandbox/
