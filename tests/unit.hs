@@ -7,7 +7,7 @@ import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.Runners.Html
 import System.IO.Silently (hCapture)
-import System.Environment (withArgs)
+import System.Environment (getArgs, withArgs)
 
 import System.IO
 import Control.Monad (replicateM_, replicateM)
@@ -16,7 +16,9 @@ import Control.Concurrent (threadDelay)
 import Data.IORef (readIORef, modifyIORef')
 
 main :: IO ()
-main = withArgs ["-j1"] $ -- don't run tests in parallel because it messes output
+main = do
+  args <- getArgs -- append to stdin args
+  withArgs ("-j1":args) $ -- don't run tests in parallel because it messes output
        hSetBuffering stderr LineBuffering >>
        defaultMainWithIngredients (htmlRunner:defaultIngredients)(
          localOption (mkTimeout 1000000) $ -- timeouts any test at 1s
@@ -46,7 +48,7 @@ case_fifo = do
           suspend this
           println' "m2"
 
-  let main = main_is' (\ this -> do
+  let main = withArgs [] $ main_is' (\ this -> do
                 o1 <- newlocal c' (const $ return ()) this
                 o2 <- newlocal c' (const $ return ()) this
                 fs <- replicateM 100 (do
@@ -78,7 +80,7 @@ case_future_forwarding = do
           println' (show res')
           return res'
 
-  let main = main_is' (\ this -> do
+  let main = withArgs [] $ main_is' (\ this -> do
                 o1 <- new c' (const $ return ())
                 o2 <- new c' (const $ return ())
                 replicateM_ 100 (do
@@ -117,7 +119,7 @@ case_await_boolean = do
           C { x = x } <- liftIO $ readIORef contents             
           return x
 
-  let main = main_is' (\ this -> do
+  let main = withArgs [] $ main_is' (\ this -> do
                 o1 <- new c' (const $ return ())
                 fs <- replicateM 100 (do
                                  f1 <- o1 <!> dec
@@ -131,7 +133,7 @@ case_await_boolean = do
                 liftIO $ assertEqual "wrong last value" 0 res
                       )
 
-  let main_local = main_is' (\ this -> do
+  let main_local = withArgs [] $ main_is' (\ this -> do
                 o1 <- newlocal c' (const $ return ()) this
                 fs <- replicateM 100 (do
                                  f1 <- o1 <!> dec

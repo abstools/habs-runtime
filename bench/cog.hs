@@ -14,6 +14,7 @@ import Control.Concurrent
 import qualified Control.Concurrent.Chan.Unagi as U
 import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.TQueue
+import System.Environment (withArgs)
 
 {- Setup
  n COGs, m procs, j loops of procs
@@ -41,7 +42,7 @@ method7 j attr this = do
     
 data C = C
 
-main7 n m j = main_is' (\ this -> do
+main7 n m j = withArgs [] $ main_is' (\ this -> do
                           fs <-replicateM n (do
                                                  obj <- new C (const $ return ())
                                                  replicateM m (do
