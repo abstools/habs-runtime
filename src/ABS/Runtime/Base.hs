@@ -11,7 +11,7 @@ import Control.Monad.Trans.Cont (ContT)
 --
 -- write-once is not imposed by Haskell, but
 -- we assume our translation respects this
--- NB: we deviate from ABS by not provigin ordering of future-refs
+-- NB: we deviate from ABS by not providing ordering of future-refs
 newtype Fut a = Fut {
       fromFut :: MVar a
     } deriving Eq

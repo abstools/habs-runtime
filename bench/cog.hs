@@ -49,7 +49,7 @@ main7 n m j = withArgs [] $ main_is' (\ this -> do
                                                                 attr <- liftIO $ newIORef 0
                                                                 obj <!> method7 j attr)
                                                )
-                          mapM_ (\ f -> awaitFuture f this) (concat fs)
+                          mapM_ (\ f -> awaitFuture' f this) (concat fs)
                        )
 
 
