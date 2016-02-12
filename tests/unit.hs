@@ -33,7 +33,7 @@ data C = C { x :: Int} -- an obj with 1 attribute
 c' = C { x = 0}
 
 -- we have to use stderr stream because tasty uses stdout and interferes
-println' :: String -> ABS ()
+println' :: String -> ABS' ()
 println' = liftIO . hPutStrLn stderr
 
 case_fifo :: IO ()
@@ -51,7 +51,7 @@ case_fifo = do
   let main = withArgs [] $ main_is' (\ this -> do
                 o1 <- newlocal' c' (const $ return ()) this
                 o2 <- newlocal' c' (const $ return ()) this
-                fs <- replicateM 100 (do
+                fs <- replicateM 100 (liftIO $ do
                                        f1 <- o1 <!> method1
                                        f2 <- o2 <!> method2
                                        return [f1,f2]
@@ -75,19 +75,19 @@ case_future_forwarding = do
 
   let method2 f this = do
           awaitFuture' f this
-          res <- get f
+          res <- liftIO $ get f
           let res' = res + 1
           println' (show res')
           return res'
 
   let main = withArgs [] $ main_is' (\ this -> do
-                o1 <- new c' (const $ return ())
-                o2 <- new c' (const $ return ())
+                o1 <- liftIO $ new c' (const $ return ())
+                o2 <- liftIO $ new c' (const $ return ())
                 replicateM_ 100 (do
-                                       f1 <- o1 <!> method1
-                                       f2 <- o2 <!> method2 f1
+                                       f1 <- liftIO $ o1 <!> method1
+                                       f2 <- liftIO $ o2 <!> method2 f1
                                        awaitFuture' f2 this
-                                       res <- get f1
+                                       res <- liftIO $ get f1
                                        liftIO $ threadDelay 10
                                        println' (show res)
                                      )
@@ -99,7 +99,7 @@ case_future_forwarding = do
 
 case_await_boolean :: IO ()
 case_await_boolean = do
-  let inc this@(Obj contents _) = do
+  let inc this@(Obj' contents _) = do
           liftIO $ threadDelay 10
           awaitBool' (\ C { x = x } -> x == 0) this             
           liftIO $ modifyIORef' contents (\ C { x = x } -> C { x = x + 1})             
@@ -107,7 +107,7 @@ case_await_boolean = do
           suspend this
           return ()
 
-  let dec this@(Obj contents _) = do
+  let dec this@(Obj' contents _) = do
           liftIO $ threadDelay 10
           awaitBool' (\ C { x = x } -> x == 1) this             
           liftIO $ modifyIORef' contents (\ C { x = x } -> C { x = x - 1})             
@@ -115,36 +115,36 @@ case_await_boolean = do
           suspend this
           return ()
 
-  let check this@(Obj contents _) = do
+  let check this@(Obj' contents _) = do
           C { x = x } <- liftIO $ readIORef contents             
           return x
 
   let main = withArgs [] $ main_is' (\ this -> do
-                o1 <- new c' (const $ return ())
-                fs <- replicateM 100 (do
+                o1 <- liftIO $ new c' (const $ return ())
+                fs <- replicateM 100 (liftIO $ do
                                  f1 <- o1 <!> dec
                                  f2 <- o1 <!> inc
                                  return [f1,f2]
                                     )
                 mapM_ (\ f -> awaitFuture' f this) (concat fs)
                 liftIO $ threadDelay 1000
-                f <- o1 <!> check
-                res <- get f
+                f <- liftIO $ o1 <!> check
+                res <- liftIO $ get f
                 liftIO $ assertEqual "wrong last value" 0 res
                       )
 
   let main_local = withArgs [] $ main_is' (\ this -> do
                 o1 <- newlocal' c' (const $ return ()) this
-                fs <- replicateM 100 (do
+                fs <- replicateM 100 (liftIO $ do
                                  f1 <- o1 <!> dec
                                  f2 <- o1 <!> inc
                                  return [f1,f2]
                                     )
                 mapM_ (\ f -> awaitFuture' f this) (concat fs)
                 liftIO $ threadDelay 1000
-                f <- o1 <!> check
+                f <- liftIO $ o1 <!> check
                 awaitFuture' f this
-                res <- get f
+                res <- liftIO $ get f
                 liftIO $ assertEqual "wrong last value" 0 res
                             )
 

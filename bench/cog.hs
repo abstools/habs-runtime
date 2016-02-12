@@ -28,7 +28,7 @@ import System.Environment (withArgs)
 
 -}
 
-method7 :: Int -> IORef Int -> Obj this -> ABS ()
+method7 :: Int -> IORef Int -> Obj' this -> ABS' ()
 method7 j attr this = do
     v <- liftIO $ readIORef attr
     liftIO $ writeIORef attr $! v + 1
@@ -43,17 +43,17 @@ method7 j attr this = do
 data C = C
 
 main7 n m j = withArgs [] $ main_is' (\ this -> do
-                          fs <-replicateM n (do
+                          fs <-replicateM n (liftIO $ do
                                                  obj <- new C (const $ return ())
                                                  replicateM m (do
-                                                                attr <- liftIO $ newIORef 0
+                                                                attr <- newIORef 0
                                                                 obj <!> method7 j attr)
                                                )
                           mapM_ (\ f -> awaitFuture' f this) (concat fs)
                        )
 
 
-method1 :: Int -> IORef Int -> MVar () -> ABS ()
+method1 :: Int -> IORef Int -> MVar () -> ABS' ()
 method1 j attr t = do
     v <- liftIO $ readIORef attr
     liftIO $ writeIORef attr $! v + 1
@@ -112,7 +112,7 @@ main2 n m j =  do
   mapM_ (\ f -> takeMVar f) (concat fs)
 
 
-method3 :: Int -> IORef Int -> Chan (() -> ABS ()) -> ABS ()
+method3 :: Int -> IORef Int -> Chan (() -> ABS' ()) -> ABS' ()
 method3 j attr t = do
     v <- liftIO $ readIORef attr
     liftIO $ writeIORef attr $! v + 1
@@ -149,7 +149,7 @@ main3 n m j =  do
   mapM_ (\ f -> takeMVar f) (concat fs)
 
 
-method4 :: Int -> IORef Int -> (U.InChan (() -> ABS ()), U.OutChan (() -> ABS ())) -> ABS ()
+method4 :: Int -> IORef Int -> (U.InChan (() -> ABS' ()), U.OutChan (() -> ABS' ())) -> ABS' ()
 method4 j attr c@(i,o) = do
     v <- liftIO $ readIORef attr
     liftIO $ writeIORef attr $! v + 1
@@ -186,7 +186,7 @@ main4 n m j =  do
   mapM_ (\ f -> takeMVar f) (concat fs)
 
 
-method5 :: Int -> IORef Int -> TQueue (() -> ABS ()) -> ABS ()
+method5 :: Int -> IORef Int -> TQueue (() -> ABS' ()) -> ABS' ()
 method5 j attr t = do
     v <- liftIO $ readIORef attr
     liftIO $ writeIORef attr $! v + 1

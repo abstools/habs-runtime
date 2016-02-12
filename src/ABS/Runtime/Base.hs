@@ -23,7 +23,7 @@ instance Show (Fut a) where
 -- 1) a reference to its cog
 -- 2) its attributes placed in a mutable variable=IORef
 -- NB: we deviate from ABS by not providing ordering of object-refs
-data Obj contents = Obj (IORef contents) !Cog 
+data Obj' contents = Obj' (IORef contents) !Cog 
 
 -- no need for Eq (Obj a). it is done by boilerplate generation of instance Eq I
 -- instance Eq I where
@@ -36,22 +36,22 @@ data Obj contents = Obj (IORef contents) !Cog
 --
 -- a process becomes active by acquiring&holding the COG's lock.
 -- a process deactivates (by suspend,await) by releasing the lock.
-data Cog = Cog (IORef SleepTable) (TQueue (() -> ABS ()))
+data Cog = Cog (IORef SleepTable) (TQueue (() -> ABS' ()))
 
 instance Eq Cog where
     (Cog token1 _) == (Cog token2 _) = token1 == token2
 
 type SleepTable = [ (IO Bool     -- test function
-                    ,() -> ABS ())  -- continuation
+                    ,() -> ABS' ())  -- continuation
                   ]
 
-type ABS a = ContT () IO a
+type ABS' a = ContT () IO a
 
 
 -- | Subtyping-relation for ABS objects (as a multiparam typeclass)
-class Sub sub sup where
+class Sub' sub sup where
     -- | The upcasting method from a subtype to a supertype
-    up :: sub -> sup
+    up' :: sub -> sup
 
 
 

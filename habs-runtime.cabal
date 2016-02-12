@@ -46,6 +46,8 @@ library
     ABS.Runtime.Prim,
     -- cmdline options for the runtime
     ABS.Runtime.CmdOpt    
+    -- name-clash-avoiding wrapper module used by the codegen 
+    ABS.Runtime
   other-modules:
     ABS.Runtime.TQueue
   ghc-options: -Wall -fno-warn-orphans
