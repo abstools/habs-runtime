@@ -12,7 +12,7 @@ cmdOpt = unsafePerformIO (cmdArgs cmdOptSpec)
 data CmdOpt = CmdOpt {
       keep_alive :: Bool -- ^ If enabled, the ABS-program will keep running even after the end of the main-block process
     , trace_exceptions :: Bool -- ^ The COGs hide any uncaught exceptions by default. This option logs to the stdout an uncaught exception. Used for debugging
-    } deriving (Show, Data)
+    } deriving (Show, Data, Typeable)
 
 cmdOptSpec :: CmdOpt
 cmdOptSpec = CmdOpt { 
