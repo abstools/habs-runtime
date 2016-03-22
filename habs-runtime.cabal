@@ -36,6 +36,8 @@ library
     transformers>=0.4,
     -- we use STM's TQueue for our mailbox datastructure
     stm>=2.4,
+    -- generating fmap for n-functors (functor,bifunctor,trifunctor...) and thus implementing covariance of subtyping
+    genifunctors>=0.3,
     -- for lifting exceptions to ABS monad and so to implement the exceptions extension for ABS
     -- exceptions>=0.6.1,
     cmdargs

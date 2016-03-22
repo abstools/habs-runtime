@@ -27,7 +27,7 @@ data Obj' contents = Obj' (IORef contents) !Cog
 
 -- no need for Eq (Obj a). it is done by boilerplate generation of instance Eq I
 -- instance Eq I where
---    I (Obj _ ioref1) == I (Obj _ ioref2) = ioref1 == ioref2
+--    I (Obj ioref1 _) == I (Obj ioref2 _) = ioref1 == ioref2
 -- no need for Show (Obj a). show is done by the exposed interface-wrapper
 -- instance Show I where
 --    show _ = "I" 
