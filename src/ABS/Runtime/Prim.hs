@@ -5,6 +5,7 @@ module ABS.Runtime.Prim
     , (<.>), (<..>), (<!>), (<!!>)
     , println, readln, skip, main_is'
     , while
+    , assert
     ) where
 
 import ABS.Runtime.Base
@@ -22,6 +23,7 @@ import System.IO.Unsafe (unsafePerformIO)
 import Prelude hiding (null)
 import Control.Monad (liftM, when)
 import Control.Exception (evaluate)
+import qualified Control.Exception (assert)
 
 -- this is fine but whenever it is used
 -- we do (unsafeCoerce null :: MVar a) == d
@@ -261,3 +263,7 @@ main_is' mainABS' = runInUnboundThread $ do
   evalContT $ do
     mainABS' $ Obj' (error "runtime error: the main ABS' block tried to call 'this'") (Cog st mb) 
     when (keep_alive cmdOpt) $ back' (Cog st mb) -- if we want the main not to exit too early, we pass keep-alive that keeps the ABS' program alive forever
+
+{-# INLINE assert #-}
+assert :: Bool -> ABS' ()
+assert b = Control.Exception.assert b (return ())
