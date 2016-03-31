@@ -181,8 +181,8 @@ new objSmartCon initFun = do
 
 
 {-# INLINE newlocal' #-}
-newlocal' :: a -> (Obj' a -> ABS' ()) -> Obj' this -> ABS' (Obj' a)
-newlocal' objSmartCon initFun (Obj' _ thisCog) = do
+newlocal' :: Obj' this -> a -> (Obj' a -> ABS' ()) -> ABS' (Obj' a)
+newlocal' (Obj' _ thisCog) objSmartCon initFun = do
                 -- create the object
                 newObj'Contents <- liftIO $ newIORef objSmartCon
                 let newObj' = Obj' newObj'Contents thisCog

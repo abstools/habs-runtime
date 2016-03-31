@@ -49,8 +49,8 @@ case_fifo = do
           println' "m2"
 
   let main = withArgs [] $ main_is' (\ this -> do
-                o1 <- newlocal' c' (const $ return ()) this
-                o2 <- newlocal' c' (const $ return ()) this
+                o1 <- newlocal' this c' (const $ return ()) 
+                o2 <- newlocal' this c' (const $ return ())
                 fs <- replicateM 100 (liftIO $ do
                                        f1 <- o1 <!> method1
                                        f2 <- o2 <!> method2
@@ -134,7 +134,7 @@ case_await_boolean = do
                       )
 
   let main_local = withArgs [] $ main_is' (\ this -> do
-                o1 <- newlocal' c' (const $ return ()) this
+                o1 <- newlocal' this c' (const $ return ())
                 fs <- replicateM 100 (liftIO $ do
                                  f1 <- o1 <!> dec
                                  f2 <- o1 <!> inc
