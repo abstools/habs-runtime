@@ -1,4 +1,4 @@
-{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE MultiParamTypeClasses, EmptyDataDecls #-}
 -- | All the types and datastructures used in the ABS-Haskell runtime
 module ABS.Runtime.Base where
 
@@ -55,3 +55,5 @@ class Sub' sub sup where
 
 -- local variables in the statement are mutable references
 type IORef' = IORef
+
+data Null'

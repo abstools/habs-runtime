@@ -31,7 +31,7 @@ import qualified Control.Exception (assert)
 -- (unsafeCoerce null ::MVar a) == (unsafeCoerce null :: MVar a)
 
 {-# NOINLINE null #-}
-null :: Obj' a
+null :: Obj' Null'
 null = Obj' (unsafePerformIO $ newIORef undefined) -- its object contents
            (error "call to null object") -- its COG
 
