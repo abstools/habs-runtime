@@ -1,4 +1,4 @@
-{-# LANGUAGE MultiParamTypeClasses, ConstraintKinds #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 -- | All the types and datastructures used in the ABS-Haskell runtime
 module ABS.Runtime.Base where
 
@@ -55,9 +55,3 @@ class Sub' sub sup where
 
 -- local variables in the statement are mutable references
 type IORef' = IORef
-
--- Using the ConstraintKinds extension, we can define typeclass synonyms, to avoid name-clashing when ABS codegen
-type Eq' = Prelude.Eq
-type Ord' = Prelude.Ord
-type Show' = Prelude.Show
-
