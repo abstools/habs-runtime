@@ -228,11 +228,11 @@ println = liftIO . putStrLn
 readln :: ABS' String
 readln = liftIO getLine
 
-while :: ABS' Bool -> ABS' () -> ABS' ()
+while :: IO Bool -> ABS' () -> ABS' ()
 while predAction loopAction = do
-  res <- predAction
+  res <- liftIO predAction
   if res
-   then while predAction loopAction
+   then loopAction >> while predAction loopAction
    else return ()                -- continue
 
 -- -- for using inside ABS' monad
