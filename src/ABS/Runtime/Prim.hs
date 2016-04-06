@@ -160,7 +160,7 @@ emptyFuture = fmap Fut $ newEmptyMVar
 
 {-# INLINE new #-}
 -- | new, unlifted
-new :: a -> (Obj' a -> ABS' ()) -> IO (Obj' a)
+new :: a -> (Obj' a -> IO ()) -> IO (Obj' a)
 new objSmartCon initFun = do
                 -- create the cog
                 newCogSleepTable <- newIORef []
@@ -172,22 +172,24 @@ new objSmartCon initFun = do
                 let newObj' = Obj' newObj'Contents newCog
 
                 -- create the init process on the new Cog
-                _ <- forkIO $ evalContT $ do
-                                     initFun newObj'
-                                     k <- liftIO $ atomically $ readTQueue newCogMailBox -- init method exits, does not have to findWoken because its sleeptable is empty
-                                     k ()
+                _ <- forkIO $ do
+                            initFun newObj'
+                            evalContT $ do
+                               k <- liftIO $ atomically $ readTQueue newCogMailBox -- init method exits, does not have to findWoken because its sleeptable is empty
+                               k ()
 
                 return newObj'
 
 
 {-# INLINE newlocal' #-}
-newlocal' :: Obj' this -> a -> (Obj' a -> ABS' ()) -> ABS' (Obj' a)
+-- | new local, unlifted
+newlocal' :: Obj' this -> a -> (Obj' a -> IO ()) -> IO (Obj' a)
 newlocal' (Obj' _ thisCog) objSmartCon initFun = do
                 -- create the object
-                newObj'Contents <- liftIO $ newIORef objSmartCon
+                newObj'Contents <- newIORef objSmartCon
                 let newObj' = Obj' newObj'Contents thisCog
                 
-                -- Safe optimization: we call init directly from here, safe because init is not allowed to yield
+                -- Safe optimization: we call init directly from here, safe because init cannot yield (has type IO)
                 initFun newObj'
 
                 return newObj'
@@ -234,20 +236,6 @@ while predAction loopAction = do
   if res
    then loopAction >> while predAction loopAction
    else return ()                -- continue
-
--- -- for using inside ABS' monad
--- {-# INLINE ifthenM' #-}
--- ifthenM' :: ABS' Bool -> (ABS' () -> ABS' ()) -> ABS' () -> ABS' ()
--- ifthenM' texp stm_then k = texp >>= (\ e -> if e
---                                            then stm_then k
---                                            else k)
-
--- -- for using inside ABS' monad
--- {-# INLINE ifthenelseM' #-}
--- ifthenelseM' :: ABS' Bool -> (ABS' () -> ABS' ()) -> (ABS' () -> ABS' ()) -> ABS' () -> ABS' ()
--- ifthenelseM' texp stm_then stm_else k = texp >>= (\ e -> if e 
---                                                        then stm_then k
---                                                        else stm_else k)
 
 {-# INLINE main_is' #-}
 -- | This function takes an ABS'' main function in the module and executes the ABS' program.
