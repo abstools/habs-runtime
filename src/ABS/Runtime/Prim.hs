@@ -124,7 +124,7 @@ emptyFuture = fmap Fut $ newEmptyMVar
 
 {-# INLINE (<.>) #-}
 -- | sync
-(<.>) :: Obj' a -> (Obj' a -> ABS' ()) -> Obj' this -> ABS' ()
+(<.>) :: Obj' a -> (Obj' a -> ABS' r) -> Obj' this -> ABS' r
 (<.>) obj@(Obj' _ (Cog _ objCogToken)) methodPartiallyApplied (Obj' _ (Cog _ thisCogToken)) = 
     if objCogToken == thisCogToken
     then methodPartiallyApplied obj
@@ -132,7 +132,7 @@ emptyFuture = fmap Fut $ newEmptyMVar
 
 {-# INLINE (<..>) #-}
 -- | optimized sync, by not running same-cog-check. Used only by the generation when stumbled on "this.m()".
-(<..>) :: Obj' a -> (Obj' a -> ABS' ()) -> ABS' ()
+(<..>) :: Obj' a -> (Obj' a -> ABS' r) -> ABS' r
 (<..>) obj methodPartiallyApplied = methodPartiallyApplied obj -- it is the reverse application
 
 {-# INLINE (<!>) #-}
