@@ -44,7 +44,7 @@ data C = C
 
 main7 n m j = withArgs [] $ main_is' (\ this -> do
                           fs <-replicateM n (liftIO $ do
-                                                 obj <- new C (const $ return ())
+                                                 obj <- new (const $ return ()) C
                                                  replicateM m (do
                                                                 attr <- newIORef 0
                                                                 obj <!> method7 j attr)
