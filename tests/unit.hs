@@ -56,7 +56,7 @@ case_fifo = do
                                        f2 <- o2 <!> method2
                                        return [f1,f2]
                                      )
-                mapM_ (\ f -> awaitFuture' f this) (concat fs) -- so that main does not exit too early
+                mapM_ (\ f -> awaitFuture' this f) (concat fs) -- so that main does not exit too early
                       )
                                 
   (outStr, ()) <- hCapture [stderr] main
@@ -74,7 +74,7 @@ case_future_forwarding = do
           return 3
 
   let method2 f this = do
-          awaitFuture' f this
+          awaitFuture' this f
           res <- liftIO $ get f
           let res' = res + 1
           println' (show res')
@@ -86,7 +86,7 @@ case_future_forwarding = do
                 replicateM_ 100 (do
                                        f1 <- liftIO $ o1 <!> method1
                                        f2 <- liftIO $ o2 <!> method2 f1
-                                       awaitFuture' f2 this
+                                       awaitFuture' this f2
                                        res <- liftIO $ get f1
                                        liftIO $ threadDelay 10
                                        println' (show res)
@@ -101,7 +101,7 @@ case_await_boolean :: IO ()
 case_await_boolean = do
   let inc this@(Obj' contents _) = do
           liftIO $ threadDelay 10
-          awaitBool' (\ C { x = x } -> x == 0) this             
+          awaitBool' this (\ C { x = x } -> x == 0)             
           liftIO $ modifyIORef' contents (\ C { x = x } -> C { x = x + 1})             
           println' "inc"
           suspend this
@@ -109,7 +109,7 @@ case_await_boolean = do
 
   let dec this@(Obj' contents _) = do
           liftIO $ threadDelay 10
-          awaitBool' (\ C { x = x } -> x == 1) this             
+          awaitBool' this (\ C { x = x } -> x == 1)             
           liftIO $ modifyIORef' contents (\ C { x = x } -> C { x = x - 1})             
           println' "dec"
           suspend this
@@ -126,7 +126,7 @@ case_await_boolean = do
                                  f2 <- o1 <!> inc
                                  return [f1,f2]
                                     )
-                mapM_ (\ f -> awaitFuture' f this) (concat fs)
+                mapM_ (\ f -> awaitFuture' this f) (concat fs)
                 liftIO $ threadDelay 1000
                 f <- liftIO $ o1 <!> check
                 res <- liftIO $ get f
@@ -140,10 +140,10 @@ case_await_boolean = do
                                  f2 <- o1 <!> inc
                                  return [f1,f2]
                                     )
-                mapM_ (\ f -> awaitFuture' f this) (concat fs)
+                mapM_ (\ f -> awaitFuture' this f) (concat fs)
                 liftIO $ threadDelay 1000
                 f <- liftIO $ o1 <!> check
-                awaitFuture' f this
+                awaitFuture' this f
                 res <- liftIO $ get f
                 liftIO $ assertEqual "wrong last value" 0 res
                             )

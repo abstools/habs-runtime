@@ -89,8 +89,8 @@ back' (Cog thisSleepTable thisMailBox) = do
 -- 1 awaitBool (x > 2 && y < 4);
 
 {-# INLINE awaitFuture' #-}
-awaitFuture' :: Fut a -> Obj' this -> ABS' ()
-awaitFuture' (Fut fut) (Obj' _ thisCog@(Cog _ thisMailBox)) = do
+awaitFuture' :: Obj' this -> Fut a -> ABS' ()
+awaitFuture' (Obj' _ thisCog@(Cog _ thisMailBox)) (Fut fut) = do
   empty <- liftIO $ isEmptyMVar fut -- according to ABS' semantics it should continue right away, hence this test.
   if empty
    then callCC (\ k -> do
@@ -101,8 +101,8 @@ awaitFuture' (Fut fut) (Obj' _ thisCog@(Cog _ thisMailBox)) = do
    else return ()                   -- continue
 
 {-# INLINE awaitBool' #-}
-awaitBool' :: (thisContents -> Bool) -> Obj' thisContents -> ABS' ()
-awaitBool' testFun (Obj' thisContentsRef (Cog thisSleepTable thisMailBox)) = do
+awaitBool' :: Obj' thisContents -> (thisContents -> Bool) -> ABS' ()
+awaitBool' (Obj' thisContentsRef (Cog thisSleepTable thisMailBox)) testFun = do
   thisContents <- liftIO $ readIORef thisContentsRef
   if testFun thisContents
    then return () -- continue
