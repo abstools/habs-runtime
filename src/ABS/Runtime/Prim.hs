@@ -160,8 +160,8 @@ emptyFuture = fmap Fut $ newEmptyMVar
 
 {-# INLINE new #-}
 -- | new, unlifted
-new :: a -> (Obj' a -> IO ()) -> IO (Obj' a)
-new objSmartCon initFun = do
+new :: (Obj' a -> IO ()) -> a -> IO (Obj' a)
+new initFun objSmartCon = do
                 -- create the cog
                 newCogSleepTable <- newIORef []
                 newCogMailBox <- newTQueueIO
@@ -183,8 +183,8 @@ new objSmartCon initFun = do
 
 {-# INLINE newlocal' #-}
 -- | new local, unlifted
-newlocal' :: Obj' this -> a -> (Obj' a -> IO ()) -> IO (Obj' a)
-newlocal' (Obj' _ thisCog) objSmartCon initFun = do
+newlocal' :: Obj' this -> (Obj' a -> IO ()) -> a -> IO (Obj' a)
+newlocal' (Obj' _ thisCog) initFun objSmartCon = do
                 -- create the object
                 newObj'Contents <- newIORef objSmartCon
                 let newObj' = Obj' newObj'Contents thisCog
