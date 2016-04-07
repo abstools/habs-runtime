@@ -2,7 +2,7 @@ module ABS.Runtime.Prim
     ( null
     , suspend, awaitFuture', awaitBool', get, emptyFuture
     , new, newlocal'
-    , (<.>), (<..>), (<!>), (<!!>)
+    , sync', (<..>), (<!>), (<!!>)
     , println, readln, skip, main_is'
     , while
     , assert
@@ -122,12 +122,12 @@ awaitBool' testFun (Obj' thisContentsRef (Cog thisSleepTable thisMailBox)) = do
 emptyFuture :: IO (Fut a)
 emptyFuture = fmap Fut $ newEmptyMVar
 
-{-# INLINE (<.>) #-}
+{-# INLINE sync' #-}
 -- | sync
-(<.>) :: Obj' a -> (Obj' a -> ABS' r) -> Obj' this -> ABS' r
-(<.>) obj@(Obj' _ (Cog _ objCogToken)) methodPartiallyApplied (Obj' _ (Cog _ thisCogToken)) = 
-    if objCogToken == thisCogToken
-    then methodPartiallyApplied obj
+sync' :: Obj' this -> Obj' a -> (Obj' a -> ABS' r) -> ABS' r
+sync' (Obj' _ (Cog _ thisCogToken)) callee@(Obj' _ (Cog _ calleeCogToken)) methodPartiallyApplied = 
+    if calleeCogToken == thisCogToken
+    then methodPartiallyApplied callee
     else error "SyncCalltoDifferentCOG"
 
 {-# INLINE (<..>) #-}
