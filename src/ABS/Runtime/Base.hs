@@ -1,4 +1,4 @@
-{-# LANGUAGE MultiParamTypeClasses, EmptyDataDecls #-}
+{-# LANGUAGE MultiParamTypeClasses, EmptyDataDecls, FlexibleInstances #-}
 -- | All the types and datastructures used in the ABS-Haskell runtime
 module ABS.Runtime.Base where
 
@@ -52,6 +52,10 @@ type ABS' a = ContT () IO a
 class Sub' sub sup where
     -- | The upcasting method from a subtype to a supertype
     up' :: sub -> sup
+
+-- self instance
+instance Sub' a a where
+    up' x = x
 
 -- local variables in the statement are mutable references
 type IORef' = IORef
