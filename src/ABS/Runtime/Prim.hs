@@ -33,7 +33,7 @@ import qualified Control.Exception (assert)
 {-# NOINLINE null #-}
 null :: Obj' Null'
 null = Obj' (unsafePerformIO $ newIORef undefined) -- its object contents
-           (error "call to null object") -- its COG
+            (Cog (error "call to null object") (error "call to null object")) -- its COG
 
 {-# INLINE suspend #-}
 -- | Optimized suspend by avoiding capturing current-continuation if the method will be reactivated immediately:
