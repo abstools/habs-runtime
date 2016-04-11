@@ -16,7 +16,7 @@ import Control.Concurrent (newEmptyMVar, isEmptyMVar, putMVar, readMVar, forkIO,
 import Control.Concurrent.STM (atomically, readTVar, readTVarIO, writeTVar)    
 
 import Control.Monad.Trans.Cont (evalContT, callCC)
-import Control.Monad.IO.Class (liftIO)
+import Control.Monad.IO.Class (MonadIO(..))
 import Data.IORef (newIORef, readIORef, writeIORef)
 import System.IO.Unsafe (unsafePerformIO)
 
@@ -230,7 +230,11 @@ println = liftIO . putStrLn
 readln :: ABS' String
 readln = liftIO getLine
 
-while :: IO Bool -> ABS' () -> ABS' ()
+-- for init
+{-# SPECIALIZE while :: IO Bool -> IO () -> IO () #-}
+-- for rest
+{-# SPECIALIZE while :: IO Bool -> ABS' () -> ABS' () #-}
+while :: (MonadIO m) => IO Bool -> m () -> m ()
 while predAction loopAction = do
   res <- liftIO predAction
   if res
