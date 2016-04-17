@@ -1,6 +1,6 @@
 module ABS.Runtime.Prim
     ( null
-    , suspend, awaitFuture', awaitBool', get, emptyFuture
+    , suspend, awaitFuture', awaitBool', get, try, resolve, emptyFuture
     , new, newlocal'
     , sync', (<..>), (<!>), (<!!>)
     , println, readln, skip, main_is'
@@ -12,7 +12,7 @@ import ABS.Runtime.Base
 import ABS.Runtime.CmdOpt
 import ABS.Runtime.TQueue (TQueue (..), newTQueueIO, writeTQueue, readTQueue)
 
-import Control.Concurrent (newEmptyMVar, isEmptyMVar, putMVar, readMVar, forkIO, runInUnboundThread)
+import Control.Concurrent (newEmptyMVar, isEmptyMVar, putMVar, readMVar, tryReadMVar, forkIO, runInUnboundThread)
 import Control.Concurrent.STM (atomically, readTVar, readTVarIO, writeTVar)    
 
 import Control.Monad.Trans.Cont (evalContT, callCC)
@@ -200,6 +200,13 @@ newlocal' (Obj' _ thisCog) initFun objSmartCon = do
 get :: Fut b -> IO b
 get (Fut fut) = readMVar fut
 
+{-# INLINE try #-}
+try :: Fut b -> IO (Maybe b)
+try (Fut fut) = tryReadMVar fut
+
+{-# INLINE resolve #-}
+resolve :: Fut b -> b -> IO ()
+resolve (Fut fut) = putMVar fut
 
 -- it has to be in IO since it runs the read-obj-attr tests
 findWoken :: SleepTable -> IO (Maybe (() -> ABS' ()), SleepTable)
