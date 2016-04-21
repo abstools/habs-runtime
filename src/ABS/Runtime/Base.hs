@@ -36,13 +36,13 @@ data Obj' contents = Obj' (IORef contents) !Cog
 --
 -- a process becomes active by acquiring&holding the COG's lock.
 -- a process deactivates (by suspend,await) by releasing the lock.
-data Cog = Cog (IORef SleepTable) (TQueue (() -> ABS' ()))
+data Cog = Cog (IORef SleepTable) (TQueue (ABS' ()))
 
 instance Eq Cog where
     (Cog token1 _) == (Cog token2 _) = token1 == token2
 
 type SleepTable = [ (IO Bool     -- test function
-                    ,() -> ABS' ())  -- continuation
+                    ,ABS' ())  -- continuation
                   ]
 
 type ABS' a = ContT () IO a
