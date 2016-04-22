@@ -17,7 +17,7 @@ import Control.Concurrent (newEmptyMVar, isEmptyMVar, putMVar, readMVar, tryRead
 import Control.Concurrent.STM (atomically, readTVar, readTVarIO, writeTVar)    
 
 import Control.Monad.Trans.Cont (evalContT, callCC)
-import Control.Monad.IO.Class (MonadIO(..))
+import Control.Monad.Trans.Class (lift)
 import Data.IORef (newIORef, readIORef, writeIORef)
 import System.IO.Unsafe (unsafePerformIO)
 
@@ -34,7 +34,7 @@ import Control.Applicative ((<$>), (<*>))
 -- we do (unsafeCoerce null :: MVar a) == d
 -- this.a = unsafeCoerce (null)
 -- (unsafeCoerce null ::MVar a) == (unsafeCoerce null :: MVar a)
-
+  
 {-# NOINLINE null #-}
 null :: Obj' Null'
 null = Obj' (unsafePerformIO $ newIORef undefined) -- its object contents
@@ -45,22 +45,22 @@ null = Obj' (unsafePerformIO $ newIORef undefined) -- its object contents
 -- implemented by inlining back' function and using a custom TQueue that exposes the otherwise abstract datatype TQueue.
 suspend :: Obj' this -> ABS' ()
 suspend (Obj' _ (Cog thisSleepTable thisMailBox@(TQueue tread twrite))) = do
-  (mwoken, st') <- liftIO $ findWoken =<< readIORef thisSleepTable                                                 
+  (mwoken, st') <- lift $ findWoken =<< readIORef thisSleepTable                                                 
   case mwoken of
     Nothing -> do
-      xs <- liftIO $ readTVarIO tread
+      xs <- lift $ readTVarIO tread
       case xs of
         (k':ks') -> callCC (\ k -> do
-                          liftIO $ do
+                          lift $ do
                                  atomically $ writeTQueue thisMailBox (k ())
                                  atomically $ writeTVar tread ks'
                           k')
         [] -> do 
-          ys <- liftIO $ readTVarIO twrite
+          ys <- lift $ readTVarIO twrite
           case ys of
             [] -> return ()       -- continue
             _  -> callCC (\ k -> join $
-                            liftIO $ atomically $ do
+                            lift $ atomically $ do
                                  ws <- readTVar twrite
                                  case reverse (k():ws) of
                                    [] -> error "readTQueue"
@@ -69,7 +69,7 @@ suspend (Obj' _ (Cog thisSleepTable thisMailBox@(TQueue tread twrite))) = do
                                                 return z
                          )
     Just woken -> callCC (\ k -> do
-                           liftIO $ do
+                           lift $ do
                              atomically $ writeTQueue thisMailBox (k ())                
                              writeIORef thisSleepTable st' -- the sleep-table was modified, so write it back
                            woken)
@@ -77,11 +77,11 @@ suspend (Obj' _ (Cog thisSleepTable thisMailBox@(TQueue tread twrite))) = do
 {-# INLINE back' #-}
 back' :: Cog -> ABS' ()
 back' (Cog thisSleepTable thisMailBox) = do
-  (mwoken, st') <- liftIO $ findWoken =<< readIORef thisSleepTable                                                 
+  (mwoken, st') <- lift $ findWoken =<< readIORef thisSleepTable                                                 
   case mwoken of
-    Nothing -> join $ liftIO $ atomically $ readTQueue thisMailBox
+    Nothing -> join $ lift $ atomically $ readTQueue thisMailBox
     Just woken -> do
-                liftIO $ writeIORef thisSleepTable st' -- the sleep-table was modified, so write it back
+                lift $ writeIORef thisSleepTable st' -- the sleep-table was modified, so write it back
                 woken
 
 -- Translation-time transformation
@@ -94,10 +94,10 @@ back' (Cog thisSleepTable thisMailBox) = do
 {-# INLINE awaitFuture' #-}
 awaitFuture' :: Obj' this -> Fut a -> ABS' ()
 awaitFuture' (Obj' _ thisCog@(Cog _ thisMailBox)) (Fut fut) = do
-  empty <- liftIO $ isEmptyMVar fut -- according to ABS' semantics it should continue right away, hence this test.
+  empty <- lift $ isEmptyMVar fut -- according to ABS' semantics it should continue right away, hence this test.
   when empty $
     callCC (\ k -> do
-                  _ <- liftIO $ forkIO (do
+                  _ <- lift $ forkIO (do
                                     _ <- readMVar fut    -- wait for future to be resolved
                                     atomically $ writeTQueue thisMailBox (k ()))
                   back' thisCog)
@@ -105,14 +105,14 @@ awaitFuture' (Obj' _ thisCog@(Cog _ thisMailBox)) (Fut fut) = do
 {-# INLINE awaitBool' #-}
 awaitBool' :: Obj' thisContents -> (thisContents -> Bool) -> ABS' ()
 awaitBool' (Obj' thisContentsRef (Cog thisSleepTable thisMailBox)) testFun = do
-  thisContents <- liftIO $ readIORef thisContentsRef
+  thisContents <- lift $ readIORef thisContentsRef
   unless (testFun thisContents) $
     callCC (\ k -> do
-                       (mwoken, st') <- liftIO $ findWoken =<< readIORef thisSleepTable
-                       liftIO $ writeIORef thisSleepTable $ 
+                       (mwoken, st') <- lift $ findWoken =<< readIORef thisSleepTable
+                       lift $ writeIORef thisSleepTable $ 
                                   (testFun <$> readIORef thisContentsRef, k ()) : st' -- append failed await, maybe force like modifyIORef?
                        case mwoken of
-                         Nothing -> join $ liftIO $ atomically $ readTQueue thisMailBox
+                         Nothing -> join $ lift $ atomically $ readTQueue thisMailBox
                          Just woken -> woken
                        )
 
@@ -141,7 +141,7 @@ sync' (Obj' _ (Cog _ thisCogToken)) callee@(Obj' _ (Cog _ calleeCogToken)) metho
   fut <- newEmptyMVar 
   atomically $ writeTQueue otherMailBox (do
                               res <- methodPartiallyApplied obj
-                              liftIO $ putMVar fut res      -- method resolves future
+                              lift $ putMVar fut res      -- method resolves future
                               back' otherCog)
 
   return (Fut fut)                                                            
@@ -173,7 +173,7 @@ new initFun objSmartCon = do
                 -- create the init process on the new Cog
                 _ <- forkIO $ do
                             initFun newObj'
-                            evalContT $ join $ liftIO $ atomically $ readTQueue newCogMailBox -- init method exits, does not have to findWoken because its 
+                            evalContT $ join $ lift $ atomically $ readTQueue newCogMailBox -- init method exits, does not have to findWoken because its 
 
                 return newObj'
 
@@ -227,21 +227,20 @@ skip = return ()
 {-# INLINE println #-}
 -- | I decided to be a statement and not a built-in function for keeping functions pure.
 println :: String -> ABS' ()
-println = liftIO . putStrLn
+println = lift . putStrLn
 
 {-# INLINE readln #-}
 -- | I decided to be a statement and not a built-in function for keeping functions pure.
 readln :: ABS' String
-readln = liftIO getLine
+readln = lift getLine
 
--- for init
-{-# SPECIALIZE while :: IO Bool -> IO () -> IO () #-}
--- for rest
-{-# SPECIALIZE while :: IO Bool -> ABS' () -> ABS' () #-}
-while :: (MonadIO m) => IO Bool -> m () -> m ()
-while predAction loopAction = do
-  res <- liftIO predAction
-  when res (loopAction >> while predAction loopAction) -- else continue
+-- | for init
+while' :: IO Bool -> IO () -> IO ()
+while' predAction loopAction = (`when` (loopAction >> while' predAction loopAction)) =<< predAction -- else continue
+
+while :: IO Bool -> ABS' () -> ABS' ()
+while predAction loopAction = (`when` (loopAction >> while predAction loopAction)) =<< lift predAction -- else continue
+ 
 
 {-# INLINE main_is' #-}
 -- | This function takes an ABS'' main function in the module and executes the ABS' program.
