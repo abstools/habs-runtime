@@ -5,7 +5,7 @@ module ABS.Runtime.Prim
     , new, newlocal'
     , sync', (<..>), (<!>), (<!!>)
     , println, readln, skip, main_is'
-    , while
+    , while, while'
     , assert
     ) where
 
