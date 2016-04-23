@@ -258,5 +258,5 @@ main_is' mainABS' = runInUnboundThread $ do
     when (keep_alive cmdOpt) $ back' (Cog st mb) -- if we want the main not to exit too early, we pass keep-alive that keeps the ABS' program alive forever
 
 {-# INLINE assert #-}
-assert :: Bool -> ABS' ()
+assert :: Bool -> IO ()
 assert b = Control.Exception.assert b (return ())
