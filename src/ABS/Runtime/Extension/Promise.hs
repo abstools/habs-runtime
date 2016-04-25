@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 module ABS.Runtime.Extension.Promise 
   ( emptyFuture
   , try
@@ -7,6 +8,10 @@ module ABS.Runtime.Extension.Promise
 import Control.Concurrent.MVar (newEmptyMVar, tryReadMVar, putMVar)
 
 import ABS.Runtime.Base (Fut (..))
+
+#if __GLASGOW_HASKELL__ < 710
+import Control.Applicative ((<$>))
+#endif
 
 {-# INLINE emptyFuture #-}
 -- | empty future unlifted
