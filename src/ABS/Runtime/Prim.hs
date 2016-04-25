@@ -1,7 +1,7 @@
 {-# LANGUAGE CPP #-}
 module ABS.Runtime.Prim
-    ( null
-    , suspend, awaitFuture', awaitBool', get, try, resolve, emptyFuture
+    ( null, nullFuture'
+    , suspend, awaitFuture', awaitBool', get
     , new, newlocal'
     , sync', (<..>), (<!>), (<!!>)
     , println, readln, skip, main_is'
@@ -39,6 +39,10 @@ import Control.Applicative ((<$>), (<*>))
 null :: Obj' Null'
 null = Obj' (unsafePerformIO $ newIORef undefined) -- its object contents
             (Cog (error "call to null object") (error "call to null object")) -- its COG
+
+{-# NOINLINE nullFuture' #-}
+nullFuture' :: Fut a
+nullFuture' = Fut (unsafePerformIO $ newEmptyMVar)
 
 {-# INLINE suspend #-}
 -- | Optimized suspend by avoiding capturing current-continuation if the method will be reactivated immediately:
@@ -116,10 +120,6 @@ awaitBool' (Obj' thisContentsRef (Cog thisSleepTable thisMailBox)) testFun = do
                          Just woken -> woken
                        )
 
-{-# INLINE emptyFuture #-}
--- | empty future unlifted
-emptyFuture :: IO (Fut a)
-emptyFuture = Fut <$> newEmptyMVar
 
 {-# INLINE sync' #-}
 -- | sync
@@ -197,13 +197,6 @@ newlocal' (Obj' _ thisCog) initFun objSmartCon = do
 get :: Fut b -> IO b
 get (Fut fut) = readMVar fut
 
-{-# INLINE try #-}
-try :: Fut b -> IO (Maybe b)
-try (Fut fut) = tryReadMVar fut
-
-{-# INLINE resolve #-}
-resolve :: Fut b -> b -> IO ()
-resolve (Fut fut) = putMVar fut
 
 -- it has to be in IO since it runs the read-obj-attr tests
 findWoken :: SleepTable -> IO (Maybe (ABS' ()), SleepTable)

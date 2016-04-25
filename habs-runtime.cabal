@@ -1,5 +1,5 @@
 name: habs-runtime
-version: 0.0.1
+version: 0.0.2
 
 license: BSD3
 license-file: LICENSE
@@ -50,6 +50,8 @@ library
     ABS.Runtime.CmdOpt    
     -- name-clash-avoiding wrapper module used by the codegen 
     ABS.Runtime
+    -- a runtime & syntax (in habs-parser) extension to support Promises
+    ABS.Runtime.Extension.Promise
   other-modules:
     ABS.Runtime.TQueue
   ghc-options: -Wall -fno-warn-orphans
