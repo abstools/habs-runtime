@@ -7,13 +7,14 @@ module ABS.Runtime.Prim
     , println, readln, skip, main_is'
     , while, while'
     , assert
+    , (<$!>)
     ) where
 
 import ABS.Runtime.Base
 import ABS.Runtime.CmdOpt
 import ABS.Runtime.TQueue (TQueue (..), newTQueueIO, writeTQueue, readTQueue)
 
-import Control.Concurrent (newEmptyMVar, isEmptyMVar, putMVar, readMVar, tryReadMVar, forkIO, runInUnboundThread)
+import Control.Concurrent (newEmptyMVar, isEmptyMVar, putMVar, readMVar, forkIO, runInUnboundThread)
 import Control.Concurrent.STM (atomically, readTVar, readTVarIO, writeTVar)    
 
 import Control.Monad.Trans.Cont (evalContT, callCC)
@@ -26,9 +27,21 @@ import Control.Monad (when,unless,join)
 import Control.Exception (evaluate)
 import qualified Control.Exception (assert)
 
-#if __GLASGOW_HASKELL__ < 710
+#if __GLASGOW_HASKELL__ >= 710
+import Control.Monad ((<$!>))
+#else
 import Control.Applicative ((<$>), (<*>))
+-- strict fmap (applicative), taken from base-4.8
+-- TODO: specialize
+{-# INLINE (<$!>) #-}
+(<$!>) :: Prelude.Monad m => (t -> b) -> m t -> m b
+f <$!> m = do
+  x <- m
+  let z = f x
+  z `Prelude.seq` Prelude.return z
 #endif
+
+
 
 -- this is fine but whenever it is used
 -- we do (unsafeCoerce null :: MVar a) == d
