@@ -1,8 +1,8 @@
 {-# LANGUAGE CPP #-}
 module ABS.Runtime.Extension.Promise 
-  ( emptyFuture
-  , try
-  , resolve
+  ( pro_new
+  , pro_try
+  , pro_give
   ) where
 
 import Control.Concurrent.MVar (newEmptyMVar, tryReadMVar, putMVar)
@@ -13,15 +13,15 @@ import ABS.Runtime.Base (Fut (..))
 import Control.Applicative ((<$>))
 #endif
 
-{-# INLINE emptyFuture #-}
+{-# INLINE pro_new #-}
 -- | empty future unlifted
-emptyFuture :: IO (Fut a)
-emptyFuture = Fut <$> newEmptyMVar
+pro_new :: IO (Fut a)
+pro_new = Fut <$> newEmptyMVar
 
-{-# INLINE try #-}
-try :: Fut b -> IO (Maybe b)
-try (Fut fut) = tryReadMVar fut
+{-# INLINE pro_try #-}
+pro_try :: Fut b -> IO (Maybe b)
+pro_try (Fut fut) = tryReadMVar fut
 
-{-# INLINE resolve #-}
-resolve :: Fut b -> b -> IO ()
-resolve (Fut fut) = putMVar fut
+{-# INLINE pro_give #-}
+pro_give :: Fut b -> b -> IO ()
+pro_give (Fut fut) = putMVar fut

@@ -1,7 +1,6 @@
 module Main where
 
-import ABS.Runtime.Base
-import ABS.Runtime.Prim
+import ABS.Runtime
 
 import Criterion.Main
 import Criterion.Types

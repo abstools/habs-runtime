@@ -1,7 +1,6 @@
 module Main where
 
-import ABS.Runtime.Base
-import ABS.Runtime.Prim
+import ABS.Runtime
 
 import Test.Tasty
 import Test.Tasty.HUnit
