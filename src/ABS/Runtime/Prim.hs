@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 module ABS.Runtime.Prim
     ( null, nullFuture'
     , suspend, awaitFuture', awaitBool', get
@@ -23,24 +22,9 @@ import Data.IORef (newIORef, readIORef, writeIORef)
 import System.IO.Unsafe (unsafePerformIO)
 
 import Prelude hiding (null)
-import Control.Monad (when,unless,join)
+import Control.Monad ((<$!>), when, unless, join)
 import Control.Exception (evaluate)
 import qualified Control.Exception (assert)
-
-#if __GLASGOW_HASKELL__ >= 710
-import Control.Monad ((<$!>))
-#else
-import Control.Applicative ((<$>), (<*>))
--- strict fmap (applicative), taken from base-4.8
--- TODO: specialize
-{-# INLINE (<$!>) #-}
-(<$!>) :: Prelude.Monad m => (t -> b) -> m t -> m b
-f <$!> m = do
-  x <- m
-  let z = f x
-  z `Prelude.seq` Prelude.return z
-#endif
-
 
 
 -- this is fine but whenever it is used

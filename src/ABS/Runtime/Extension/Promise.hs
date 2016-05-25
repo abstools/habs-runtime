@@ -1,17 +1,13 @@
-{-# LANGUAGE CPP #-}
 module ABS.Runtime.Extension.Promise 
   ( pro_new
   , pro_try
   , pro_give
   ) where
 
-import Control.Concurrent.MVar (newEmptyMVar, tryReadMVar, putMVar)
-
 import ABS.Runtime.Base (Fut (..))
 
-#if __GLASGOW_HASKELL__ < 710
-import Control.Applicative ((<$>))
-#endif
+import Control.Concurrent.MVar (newEmptyMVar, tryReadMVar, putMVar)
+
 
 {-# INLINE pro_new #-}
 -- | empty future unlifted
