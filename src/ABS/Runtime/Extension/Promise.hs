@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveDataTypeable #-}
 module ABS.Runtime.Extension.Promise 
   ( pro_new
   , pro_try
@@ -6,8 +7,10 @@ module ABS.Runtime.Extension.Promise
 
 import ABS.Runtime.Base (Fut (..))
 
-import Control.Concurrent.MVar (newEmptyMVar, tryReadMVar, putMVar)
-
+import Control.Concurrent.MVar (newEmptyMVar, tryReadMVar, tryPutMVar)
+import ABS.Runtime.Extension.Exception
+import Data.Typeable -- exceptions must support Show and Typeable
+import Control.Monad (unless)
 
 {-# INLINE pro_new #-}
 -- | empty future unlifted
@@ -20,4 +23,9 @@ pro_try (Fut fut) = tryReadMVar fut
 
 {-# INLINE pro_give #-}
 pro_give :: Fut b -> b -> IO ()
-pro_give (Fut fut) = putMVar fut
+pro_give (Fut fut) = (>>= (`unless` throw PromiseRewriteException)) . tryPutMVar fut 
+
+
+-- | Trying to write to an already-resolved promise
+data PromiseRewriteException = PromiseRewriteException deriving (Show, Typeable)
+instance Exception PromiseRewriteException

@@ -40,7 +40,7 @@ library
     -- generating fmap for n-functors (functor,bifunctor,trifunctor...) and thus implementing covariance of subtyping
     genifunctors>=0.3,
     -- for lifting exceptions to ABS monad and so to implement the exceptions extension for ABS
-    -- exceptions>=0.6.1,
+    exceptions,
     cmdargs
   exposed-modules:
     -- name-clash-avoiding wrapper module used by the codegen 
@@ -54,6 +54,8 @@ library
     ABS.Runtime.CmdOpt,    
     -- a runtime & syntax (in habs-parser) extension to support Promises
     ABS.Runtime.Extension.Promise,
+    -- the extension for exception constructs (try/catch/finally) and certain builtin exception datatypes
+    ABS.Runtime.Extension.Exception,
     ABS.Runtime.TQueue
   ghc-options: -Wall -fno-warn-orphans
   hs-source-dirs: src

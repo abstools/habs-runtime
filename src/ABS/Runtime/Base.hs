@@ -45,7 +45,7 @@ type SleepTable = [ (IO Bool     -- test function
                     ,ABS' ())  -- continuation
                   ]
 
-type ABS' a = ContT () IO a
+type ABS' = ContT () IO
 
 
 -- | Subtyping-relation for ABS objects (as a multiparam typeclass)
