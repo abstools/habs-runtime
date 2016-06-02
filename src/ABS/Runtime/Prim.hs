@@ -12,6 +12,7 @@ module ABS.Runtime.Prim
 import ABS.Runtime.Base
 import ABS.Runtime.CmdOpt
 import ABS.Runtime.TQueue (TQueue (..), newTQueueIO, writeTQueue, readTQueue)
+import ABS.Runtime.Extension.Exception hiding (throw) -- we use here the evaluation throw, not the ordering throwIO (throwM)
 
 import Control.Concurrent (newEmptyMVar, isEmptyMVar, putMVar, readMVar, forkIO, runInUnboundThread)
 import Control.Concurrent.STM (atomically, readTVar, readTVarIO, writeTVar)    
@@ -23,9 +24,9 @@ import System.IO.Unsafe (unsafePerformIO)
 
 import Prelude hiding (null)
 import Control.Monad ((<$!>), when, unless, join)
-import Control.Exception (evaluate)
+import Control.Exception (throw, evaluate)
 import qualified Control.Exception (assert)
-
+import Control.Monad.Catch (catchAll)
 
 -- this is fine but whenever it is used
 -- we do (unsafeCoerce null :: MVar a) == d
@@ -137,7 +138,10 @@ sync' (Obj' _ (Cog _ thisCogToken)) callee@(Obj' _ (Cog _ calleeCogToken)) metho
 (<!>) obj@(Obj' _ otherCog@(Cog _ otherMailBox)) methodPartiallyApplied = do
   fut <- newEmptyMVar 
   atomically $ writeTQueue otherMailBox (do
-                              res <- methodPartiallyApplied obj
+                              res <- methodPartiallyApplied obj `catchAll` (\ someEx -> do
+                                          when (trace_exceptions cmdOpt) (lift $ putStrLn $ "Process died upon Uncaught-Exception: " ++ show someEx)
+                                          return $ throw someEx)  -- rethrows it inside the future-"box"                                       
+                            
                               lift $ putMVar fut res      -- method resolves future
                               back' otherCog)
 
@@ -149,7 +153,9 @@ sync' (Obj' _ (Cog _ thisCogToken)) callee@(Obj' _ (Cog _ calleeCogToken)) metho
 (<!!>) :: Obj' a -> (Obj' a -> ABS' b) -> IO ()
 (<!!>) obj@(Obj' _ otherCog@(Cog _ otherMailBox)) methodPartiallyApplied = 
   atomically $ writeTQueue otherMailBox (do
-               _ <- methodPartiallyApplied obj -- we throw away the result (if we had "destiny" primitive then we would need to create&resolve the future
+               -- we throw away the result (if we had "destiny" primitive then this optimization could not be easily applied
+               (() <$ methodPartiallyApplied obj) `catchAll` (\ someEx ->
+                                when (trace_exceptions cmdOpt) (lift $ putStrLn $ "Process died upon Uncaught-Exception: " ++ show someEx))
                back' otherCog)
 
 
@@ -192,7 +198,7 @@ newlocal' (Obj' _ thisCog) initFun objSmartCon = do
 {-# INLINE get #-}
 -- | get, unlifted
 get :: Fut b -> IO b
-get (Fut fut) = readMVar fut
+get (Fut fut) = readMVar fut >>= evaluate -- forces to whnf, so as to for sure re-raise to the caller in case of exception-inside-future
 
 
 -- it has to be in IO since it runs the read-obj-attr tests
