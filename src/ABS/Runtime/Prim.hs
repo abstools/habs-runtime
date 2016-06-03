@@ -2,7 +2,7 @@ module ABS.Runtime.Prim
     ( null, nullFuture'
     , suspend, awaitFuture', awaitBool', get
     , new, newlocal'
-    , sync', (<..>), (<!>), (<!!>)
+    , sync', (<..>), (<!>), (<!!>), awaitSugar'
     , println, readln, skip, main_is'
     , while, while'
     , assert
@@ -158,6 +158,38 @@ sync' (Obj' _ (Cog _ thisCogToken)) callee@(Obj' _ (Cog _ calleeCogToken)) metho
                                 when (trace_exceptions cmdOpt) (lift $ putStrLn $ "Process died upon Uncaught-Exception: " ++ show someEx))
                back' otherCog)
 
+{-# INLINE awaitSugar' #-}
+-- | for await guard sugar
+awaitSugar' :: Obj' this 
+            -> (b -> IO ()) -- ^ LHS 
+            -> Obj' a -- ^ callee
+            -> (Obj' a -> ABS' b) -- ^ method 
+            -> ABS' ()
+awaitSugar' (Obj' _ thisCog@(Cog _ thisMailBox)) lhs obj@(Obj' _ otherCog@(Cog _ otherMailBox)) methodPartiallyApplied = 
+  callCC (\ k -> do
+    lift $ atomically $ writeTQueue otherMailBox (do
+               res <- methodPartiallyApplied obj `catchAll` (\ someEx -> do
+                                          when (trace_exceptions cmdOpt) (lift $ putStrLn $ "Process died upon Uncaught-Exception: " ++ show someEx)
+                                          return $ throw someEx)  -- rethrows it inside the future-"box"
+               lift $ atomically $ writeTQueue thisMailBox (do
+                                                              lift $ lhs $! res -- whnf to force the exception at the caller side TODO: to be tested , try also evaluate
+                                                              k () )
+               back' otherCog)
+    back' thisCog)
+
+
+--{-# INLINE awaitSugar #-}
+---- | for await guard sugar
+--awaitSugar :: Obj' this -> Obj' a -> (Obj' a -> ABS' b) -> ABS' b
+--awaitSugar (Obj' _ thisCog@(Cog _ thisMailBox)) obj@(Obj' _ otherCog@(Cog _ otherMailBox)) methodPartiallyApplied = 
+--  callCC (\ k -> do
+--    lift $ atomically $ writeTQueue otherMailBox (do
+--               res <- methodPartiallyApplied obj
+--               lift $ atomically $ writeTQueue thisMailBox (k res)
+--               back' otherCog)
+--    back' thisCog
+--  )
+
 
 
 {-# INLINE new #-}
@@ -176,8 +208,7 @@ new initFun objSmartCon = do
                 -- create the init process on the new Cog
                 _ <- forkIO $ do
                             initFun newObj'
-                            evalContT $ join $ lift $ atomically $ readTQueue newCogMailBox -- init method exits, does not have to findWoken because its 
-
+                            atomically (readTQueue newCogMailBox) >>= evalContT -- init method exits, does not have to findWoken because there can be no other processes yet
                 return newObj'
 
 
