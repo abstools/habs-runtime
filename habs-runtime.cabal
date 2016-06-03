@@ -41,6 +41,8 @@ library
     genifunctors>=0.3,
     -- for lifting exceptions to ABS monad and so to implement the exceptions extension for ABS
     exceptions,
+    -- for soft-realtime extension
+    time,
     cmdargs
   exposed-modules:
     -- name-clash-avoiding wrapper module used by the codegen 

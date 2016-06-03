@@ -7,6 +7,8 @@ module ABS.Runtime.Prim
     , while, while'
     , assert
     , (<$!>)
+    -- * primitives for soft-realtime extension
+    , now, duration, awaitDuration'
     ) where
 
 import ABS.Runtime.Base
@@ -14,7 +16,7 @@ import ABS.Runtime.CmdOpt
 import ABS.Runtime.TQueue (TQueue (..), newTQueueIO, writeTQueue, readTQueue)
 import ABS.Runtime.Extension.Exception hiding (throw) -- we use here the evaluation throw, not the ordering throwIO (throwM)
 
-import Control.Concurrent (newEmptyMVar, isEmptyMVar, putMVar, readMVar, forkIO, runInUnboundThread)
+import Control.Concurrent (newEmptyMVar, isEmptyMVar, putMVar, readMVar, forkIO, threadDelay, runInUnboundThread)
 import Control.Concurrent.STM (atomically, readTVar, readTVarIO, writeTVar)    
 
 import Control.Monad.Trans.Cont (evalContT, callCC)
@@ -27,6 +29,7 @@ import Control.Monad ((<$!>), when, unless, join)
 import Control.Exception (throw, evaluate)
 import qualified Control.Exception (assert)
 import Control.Monad.Catch (catchAll)
+import Data.Time.Clock.POSIX (getPOSIXTime) -- for realtime
 
 -- this is fine but whenever it is used
 -- we do (unsafeCoerce null :: MVar a) == d
@@ -117,6 +120,16 @@ awaitBool' (Obj' thisContentsRef (Cog thisSleepTable thisMailBox)) testFun = do
                          Nothing -> join $ lift $ atomically $ readTQueue thisMailBox
                          Just woken -> woken
                        )
+
+{-# INLINE awaitDuration' #-}
+-- | in seconds, ignores second argument tmax
+awaitDuration' :: Obj' this -> Rational -> Rational -> ABS' ()
+awaitDuration' (Obj' _ thisCog@(Cog _ thisMailBox)) tmin _tmax = 
+  callCC (\ k -> do
+                  _ <- lift $ forkIO (do
+                                    threadDelay $ truncate $ tmin * 1000000 -- seconds to microseconds
+                                    atomically $ writeTQueue thisMailBox (k ()))
+                  back' thisCog)
 
 
 {-# INLINE sync' #-}
@@ -269,6 +282,16 @@ while :: IO Bool -> ABS' () -> ABS' ()
 while predAction loopAction = (`when` (loopAction >> while predAction loopAction)) =<< lift predAction -- else continue
  
 
+{-# INLINE now #-}
+now :: IO Time
+now = getPOSIXTime
+
+{-# INLINE duration #-}
+-- | in seconds, ignores second argument tmax
+duration :: Rational -> Rational -> IO ()
+duration tmin _tmax = threadDelay $ truncate $ tmin * 1000000
+
+
 {-# INLINE main_is' #-}
 -- | This function takes an ABS'' main function in the module and executes the ABS' program.
 --
@@ -287,3 +310,5 @@ main_is' mainABS' = runInUnboundThread $ do
 {-# INLINE assert #-}
 assert :: Bool -> IO ()
 assert b = Control.Exception.assert b (return ())
+
+

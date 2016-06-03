@@ -6,6 +6,7 @@ import Control.Concurrent.MVar (MVar) -- futures
 import ABS.Runtime.TQueue (TQueue) -- mailbox
 import Data.IORef (IORef)
 import Control.Monad.Trans.Cont (ContT)
+import Data.Time.Clock (NominalDiffTime) -- for realtime
 
 -- | a future reference is a write-once locking var
 --
@@ -61,3 +62,7 @@ instance Sub' a a where
 type IORef' = IORef
 
 data Null'
+
+-- for realtime
+type Time = NominalDiffTime
+
