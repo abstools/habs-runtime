@@ -54,10 +54,12 @@ library
     ABS.Runtime.Prim,
     -- cmdline options for the runtime
     ABS.Runtime.CmdOpt,    
-    -- a runtime & syntax (in habs-parser) extension to support Promises
-    ABS.Runtime.Extension.Promise,
+    -- extension for basic input/output from inside ABS
+    ABS.Runtime.Extension.IO,
     -- the extension for exception constructs (try/catch/finally) and certain builtin exception datatypes
     ABS.Runtime.Extension.Exception,
+    -- a runtime & syntax (in habs-parser) extension to support Promises
+    ABS.Runtime.Extension.Promise,
     ABS.Runtime.TQueue
   ghc-options: -Wall -fno-warn-orphans
   hs-source-dirs: src

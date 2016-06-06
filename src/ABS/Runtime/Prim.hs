@@ -1,10 +1,10 @@
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables, LambdaCase #-}
 module ABS.Runtime.Prim
     ( null, nullFuture'
     , suspend, awaitFuture', awaitBool', get
     , new, newlocal'
     , sync', (<..>), (<!>), (<!!>), awaitSugar'
-    , println, readln, skip, main_is'
+    , skip, main_is'
     , while, while'
     , (<$!>)
     -- * primitives for soft-realtime extension
@@ -14,7 +14,7 @@ module ABS.Runtime.Prim
 import ABS.Runtime.Base
 import ABS.Runtime.CmdOpt
 import ABS.Runtime.TQueue (TQueue (..), newTQueueIO, writeTQueue, readTQueue)
-import ABS.Runtime.Extension.Exception hiding (throw) -- we use here the evaluation throw, not the ordering throwIO (throwM)
+import ABS.Runtime.Extension.Exception () -- import instances only. we use here the evaluation throw, not the ordering throwIO (throwM)
 
 import Control.Concurrent (newEmptyMVar, isEmptyMVar, putMVar, readMVar, forkIO, threadDelay, runInUnboundThread)
 import Control.Concurrent.STM (atomically, readTVar, readTVarIO, writeTVar)    
@@ -44,7 +44,7 @@ null = Obj' (unsafePerformIO $ newIORef undefined) -- its object contents
 nullFuture' :: Fut a
 nullFuture' = Fut (unsafePerformIO $ newEmptyMVar)
 
-{-# INLINE suspend #-}
+{-# INLINABLE suspend #-}
 -- | Optimized suspend by avoiding capturing current-continuation if the method will be reactivated immediately:
 -- implemented by inlining back' function and using a custom TQueue that exposes the otherwise abstract datatype TQueue.
 suspend :: Obj' this -> ABS' ()
@@ -95,7 +95,7 @@ back' (Cog thisSleepTable thisMailBox) = do
 -- awaitFuture g;
 -- 1 awaitBool (x > 2 && y < 4);
 
-{-# INLINE awaitFuture' #-}
+{-# INLINABLE awaitFuture' #-}
 awaitFuture' :: Obj' this -> Fut a -> ABS' ()
 awaitFuture' (Obj' _ thisCog@(Cog _ thisMailBox)) (Fut fut) = do
   empty <- lift $ isEmptyMVar fut -- according to ABS' semantics it should continue right away, hence this test.
@@ -106,7 +106,7 @@ awaitFuture' (Obj' _ thisCog@(Cog _ thisMailBox)) (Fut fut) = do
                                     atomically $ writeTQueue thisMailBox (k ()))
                   back' thisCog)
 
-{-# INLINE awaitBool' #-}
+{-# INLINABLE awaitBool' #-}
 awaitBool' :: Obj' thisContents -> (thisContents -> Bool) -> ABS' ()
 awaitBool' (Obj' thisContentsRef (Cog thisSleepTable thisMailBox)) testFun = do
   thisContents <- lift $ readIORef thisContentsRef
@@ -120,7 +120,7 @@ awaitBool' (Obj' thisContentsRef (Cog thisSleepTable thisMailBox)) testFun = do
                          Just woken -> woken
                        )
 
-{-# INLINE awaitDuration' #-}
+{-# INLINABLE awaitDuration' #-}
 -- | in seconds, ignores second argument tmax
 awaitDuration' :: Obj' this -> Rational -> Rational -> ABS' ()
 awaitDuration' (Obj' _ thisCog@(Cog _ thisMailBox)) tmin _tmax = 
@@ -144,7 +144,7 @@ sync' (Obj' _ (Cog _ thisCogToken)) callee@(Obj' _ (Cog _ calleeCogToken)) metho
 (<..>) :: Obj' a -> (Obj' a -> ABS' r) -> ABS' r
 (<..>) obj methodPartiallyApplied = methodPartiallyApplied obj -- it is the reverse application
 
-{-# INLINE (<!>) #-}
+{-# INLINABLE (<!>) #-}
 -- | async, unlifted
 (<!>) :: Obj' a -> (Obj' a -> ABS' b) -> IO (Fut b)
 (<!>) obj@(Obj' _ otherCog@(Cog _ otherMailBox)) methodPartiallyApplied = do
@@ -162,7 +162,7 @@ sync' (Obj' _ (Cog _ thisCogToken)) callee@(Obj' _ (Cog _ calleeCogToken)) metho
   return (Fut fut)                                                            
 
 
-{-# INLINE (<!!>) #-}
+{-# INLINABLE (<!!>) #-}
 -- | fire&forget async, unlifted
 (<!!>) :: Obj' a -> (Obj' a -> ABS' b) -> IO ()
 (<!!>) obj@(Obj' _ otherCog@(Cog _ otherMailBox)) methodPartiallyApplied = 
@@ -176,7 +176,7 @@ sync' (Obj' _ (Cog _ thisCogToken)) callee@(Obj' _ (Cog _ calleeCogToken)) metho
                                       ]
                back' otherCog)
 
-{-# INLINE awaitSugar' #-}
+{-# INLINABLE awaitSugar' #-}
 -- | for await guard sugar
 awaitSugar' :: Obj' this 
             -> (b -> IO ()) -- ^ LHS 
@@ -199,21 +199,8 @@ awaitSugar' (Obj' _ thisCog@(Cog _ thisMailBox)) lhs obj@(Obj' _ otherCog@(Cog _
     back' thisCog)
 
 
---{-# INLINE awaitSugar #-}
----- | for await guard sugar
---awaitSugar :: Obj' this -> Obj' a -> (Obj' a -> ABS' b) -> ABS' b
---awaitSugar (Obj' _ thisCog@(Cog _ thisMailBox)) obj@(Obj' _ otherCog@(Cog _ otherMailBox)) methodPartiallyApplied = 
---  callCC (\ k -> do
---    lift $ atomically $ writeTQueue otherMailBox (do
---               res <- methodPartiallyApplied obj
---               lift $ atomically $ writeTQueue thisMailBox (k res)
---               back' otherCog)
---    back' thisCog
---  )
 
-
-
-{-# INLINE new #-}
+{-# INLINABLE new #-}
 -- | new, unlifted
 new :: (Obj' a -> IO ()) -> a -> IO (Obj' a)
 new initFun objSmartCon = do
@@ -233,7 +220,7 @@ new initFun objSmartCon = do
                 return newObj'
 
 
-{-# INLINE newlocal' #-}
+{-# INLINABLE newlocal' #-}
 -- | new local, unlifted
 newlocal' :: Obj' this -> (Obj' a -> IO ()) -> a -> IO (Obj' a)
 newlocal' (Obj' _ thisCog) initFun objSmartCon = do
@@ -255,14 +242,12 @@ get (Fut fut) = readMVar fut >>= evaluate -- forces to whnf, so as to for sure r
 
 -- it has to be in IO since it runs the read-obj-attr tests
 findWoken :: SleepTable -> IO (Maybe (ABS' ()), SleepTable)
-findWoken st = findWoken' st Nothing []
+findWoken st = go st []
     where
-      findWoken' [] m st' = return (m, st')
-      findWoken' (s@(t,k):st) Nothing st' = do
-        b <- t 
-        if b
-          then return (Just k, st ++ st')
-          else findWoken' st Nothing (s:st')
+      go [] rs = return (Nothing, rs)
+      go (l@(t,k):ls) rs = t >>= \case
+                                    True -> return (Just k, ls ++ rs)
+                                    False -> go ls (l:rs)
 
 
 
@@ -271,16 +256,6 @@ findWoken st = findWoken' st Nothing []
 skip :: ABS' ()
 skip = return ()
 
-
-{-# INLINE println #-}
--- | I decided to be a statement and not a built-in function for keeping functions pure.
-println :: String -> ABS' ()
-println = lift . putStrLn
-
-{-# INLINE readln #-}
--- | I decided to be a statement and not a built-in function for keeping functions pure.
-readln :: ABS' String
-readln = lift getLine
 
 -- | for init
 while' :: IO Bool -> IO () -> IO ()

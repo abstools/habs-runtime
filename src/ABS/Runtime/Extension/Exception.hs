@@ -34,7 +34,7 @@ catch a hs = a `Control.Monad.Catch.catch` handler
   where
     handler e = foldr probe (Control.Monad.Catch.throwM e) hs
       where
-        probe (Handler' h) xs = maybe xs (\ e -> case h e of
-                                                  Nothing -> xs -- trick to not throw patternmatch fail here
-                                                  Just action -> action)
-                              (Control.Monad.Catch.fromException e)
+        probe (Handler' h) xs = maybe xs (\ e' -> case h e' of
+                                                    Nothing -> xs -- trick to not throw patternmatch fail here
+                                                    Just action -> action)
+                                (Control.Monad.Catch.fromException e)
