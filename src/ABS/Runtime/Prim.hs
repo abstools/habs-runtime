@@ -30,6 +30,7 @@ import Control.Exception (AssertionFailed, SomeException, throw, evaluate)
 import Control.Monad.Catch (catches, Handler (..))
 import Data.Time.Clock.POSIX (getPOSIXTime) -- for realtime
 import qualified System.Exit (exitFailure)
+import Data.Ratio (Ratio)
 -- this is fine but whenever it is used
 -- we do (unsafeCoerce null :: MVar a) == d
 -- this.a = unsafeCoerce (null)
@@ -122,7 +123,7 @@ awaitBool' (Obj' thisContentsRef (Cog thisSleepTable thisMailBox)) testFun = do
 
 {-# INLINABLE awaitDuration' #-}
 -- | in seconds, ignores second argument tmax
-awaitDuration' :: Obj' this -> Rational -> Rational -> ABS' ()
+awaitDuration' :: Obj' this -> Ratio Int -> Ratio Int -> ABS' ()
 awaitDuration' (Obj' _ thisCog@(Cog _ thisMailBox)) tmin _tmax = 
   callCC (\ k -> do
                   _ <- lift $ forkIO (do
@@ -271,7 +272,7 @@ now = getPOSIXTime
 
 {-# INLINE duration #-}
 -- | in seconds, ignores second argument tmax
-duration :: Rational -> Rational -> IO ()
+duration :: Ratio Int -> Ratio Int -> IO ()
 duration tmin _tmax = threadDelay $ truncate $ tmin * 1000000
 
 
