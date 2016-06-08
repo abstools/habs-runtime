@@ -19,7 +19,5 @@ println = putStrLn
 
 {-# INLINE readln #-}
 -- | I decided to be a statement and not a built-in function for keeping functions pure.
---
--- Design choice: we leave it in ABS' monad so as not to allow it to run inside init block(and thus possibly make init to block on input)
-readln :: ABS' String
-readln = lift getLine
+readln :: IO String
+readln = getLine
