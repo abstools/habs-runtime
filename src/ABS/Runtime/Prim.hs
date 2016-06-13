@@ -2,6 +2,7 @@
 module ABS.Runtime.Prim
     ( null, nullFuture'
     , suspend, awaitFuture', awaitBool', get
+    , awaitFutureField', ChangedFuture' (..)
     , new, newlocal'
     , sync', (<..>), (<!>), (<!!>), awaitSugar'
     , skip, main_is'
@@ -16,21 +17,23 @@ import ABS.Runtime.CmdOpt
 import ABS.Runtime.TQueue (TQueue (..), newTQueueIO, writeTQueue, readTQueue)
 import ABS.Runtime.Extension.Exception () -- import instances only. we use here the evaluation throw, not the ordering throwIO (throwM)
 
-import Control.Concurrent (newEmptyMVar, isEmptyMVar, putMVar, readMVar, forkIO, threadDelay, runInUnboundThread)
+import Control.Concurrent (ThreadId, myThreadId, newEmptyMVar, isEmptyMVar, putMVar, readMVar, forkIO, threadDelay, runInUnboundThread)
 import Control.Concurrent.STM (atomically, readTVar, readTVarIO, writeTVar)    
 
 import Control.Monad.Trans.Cont (evalContT, callCC)
 import Control.Monad.Trans.Class (lift)
-import Data.IORef (newIORef, readIORef, writeIORef)
+import Data.IORef (newIORef, readIORef, writeIORef, modifyIORef')
 import System.IO.Unsafe (unsafePerformIO)
 
 import Prelude hiding (null)
 import Control.Monad ((<$!>), when, unless, join)
-import Control.Exception (AssertionFailed, SomeException, throw, evaluate)
-import Control.Monad.Catch (catches, Handler (..))
+import Control.Exception (AssertionFailed, SomeException, Exception, throw, evaluate)
+import Control.Monad.Catch (catch, catches, Handler (..))
 import Data.Time.Clock.POSIX (getPOSIXTime) -- for realtime
 import qualified System.Exit (exitFailure)
 import Data.Ratio (Ratio)
+import Data.Typeable
+import Data.List (delete)
 -- this is fine but whenever it is used
 -- we do (unsafeCoerce null :: MVar a) == d
 -- this.a = unsafeCoerce (null)
@@ -106,6 +109,31 @@ awaitFuture' (Obj' _ thisCog@(Cog _ thisMailBox)) (Fut fut) = do
                                     _ <- readMVar fut    -- wait for future to be resolved
                                     atomically $ writeTQueue thisMailBox (k ()))
                   back' thisCog)
+
+{-# INLINABLE awaitFutureField' #-}
+awaitFutureField' :: Typeable a 
+                  => Obj' this 
+                  -> (([ThreadId] -> [ThreadId]) -> this -> this) 
+                  -> Fut a 
+                  -> ABS' ()
+awaitFutureField' (Obj' this' thisCog@(Cog _ thisMailBox)) setter f@(Fut mvar) = do
+  empty <- lift $ isEmptyMVar mvar -- according to ABS' semantics it should continue right away, hence this test.
+  when empty $
+    callCC (\ k -> do
+                  lift $ forkIO (go f k) >>= \ tid -> modifyIORef' this' (setter (tid:))
+                  back' thisCog)
+  where
+    go (Fut mvar') k = (do
+                    _ <- readMVar mvar'    -- wait for future to be resolved
+                    tid <- myThreadId
+                    atomically $ writeTQueue thisMailBox (do
+                        lift $ modifyIORef' this' (setter (delete tid))
+                        k ())
+                 ) `catch` (\ (ChangedFuture' f') -> go f' k)
+
+data ChangedFuture' a = ChangedFuture' (Fut a)
+instance Show (ChangedFuture' a) where show _ = "ChangedFuture' exception"
+instance (Typeable a) => Exception (ChangedFuture' a)
 
 {-# INLINABLE awaitBool' #-}
 awaitBool' :: Obj' thisContents -> (thisContents -> Bool) -> ABS' ()
@@ -198,6 +226,7 @@ awaitSugar' (Obj' _ thisCog@(Cog _ thisMailBox)) lhs obj@(Obj' _ otherCog@(Cog _
                                                               k () )
                back' otherCog)
     back' thisCog)
+
 
 
 
