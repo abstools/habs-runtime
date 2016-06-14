@@ -2,6 +2,7 @@
 module ABS.Runtime.Prim
     ( null, nullFuture'
     , suspend, awaitFuture', awaitBool', get
+    , awaitFutures'
     , awaitFutureField', ChangedFuture' (..)
     , new, newlocal'
     , sync', (<..>), (<!>), (<!!>), awaitSugar'
@@ -109,6 +110,34 @@ awaitFuture' (Obj' _ thisCog@(Cog _ thisMailBox)) (Fut fut) = do
                                     _ <- readMVar fut    -- wait for future to be resolved
                                     atomically $ writeTQueue thisMailBox (k ()))
                   back' thisCog)
+
+{-# INLINABLE awaitFutures' #-}
+awaitFutures' :: Obj' this -> [IO Bool] -> IO a -> ABS' ()
+awaitFutures' (Obj' _ thisCog@(Cog _ thisMailBox)) pollingTest blockingAction = do
+  someEmpty <- lift $ orM pollingTest -- according to ABS' semantics it should continue right away, hence this test.
+  when someEmpty $
+    callCC (\ k -> do
+                  _ <- lift $ forkIO (do
+                                    _ <- blockingAction    -- wait for future to be resolved
+                                    atomically $ writeTQueue thisMailBox (k ()))
+                  back' thisCog)
+
+orM :: [IO Bool] -> IO Bool
+orM []          = return False
+orM (p:ps)      = do
+        q <- p
+        if q
+          then return True
+          else orM ps
+
+---- taken from package monad-loops
+--anyM :: (a -> IO Bool) -> [a] -> IO Bool
+--anyM _ []       = return False
+--anyM p (x:xs)   = do
+--        q <- p x
+--        if q
+--          then return True
+--          else anyM p xs
 
 {-# INLINABLE awaitFutureField' #-}
 awaitFutureField' :: Typeable a 
