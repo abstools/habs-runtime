@@ -47,7 +47,7 @@ null = Obj' (unsafePerformIO $ newIORef undefined) -- its object contents
 
 {-# NOINLINE nullFuture' #-}
 nullFuture' :: Fut a
-nullFuture' = Fut (unsafePerformIO $ newEmptyMVar)
+nullFuture' = unsafePerformIO $ newEmptyMVar
 
 {-# INLINABLE suspend #-}
 -- | Optimized suspend by avoiding capturing current-continuation if the method will be reactivated immediately:
@@ -102,7 +102,7 @@ back' (Cog thisSleepTable thisMailBox) = do
 
 {-# INLINABLE awaitFuture' #-}
 awaitFuture' :: Obj' this -> Fut a -> ABS' ()
-awaitFuture' (Obj' _ thisCog@(Cog _ thisMailBox)) (Fut fut) = do
+awaitFuture' (Obj' _ thisCog@(Cog _ thisMailBox)) fut = do
   empty <- lift $ isEmptyMVar fut -- according to ABS' semantics it should continue right away, hence this test.
   when empty $
     callCC (\ k -> do
@@ -145,20 +145,20 @@ awaitFutureField' :: Typeable a
                   -> (([ThreadId] -> [ThreadId]) -> this -> this) 
                   -> Fut a 
                   -> ABS' ()
-awaitFutureField' (Obj' this' thisCog@(Cog _ thisMailBox)) setter f@(Fut mvar) = do
+awaitFutureField' (Obj' this' thisCog@(Cog _ thisMailBox)) setter mvar = do
   empty <- lift $ isEmptyMVar mvar -- according to ABS' semantics it should continue right away, hence this test.
   when empty $
     callCC (\ k -> do
-                  lift $ forkIO (go f k) >>= \ tid -> modifyIORef' this' (setter (tid:))
+                  lift $ forkIO (go mvar k) >>= \ tid -> modifyIORef' this' (setter (tid:))
                   back' thisCog)
   where
-    go (Fut mvar') k = (do
+    go mvar' k = (do
                     _ <- readMVar mvar'    -- wait for future to be resolved
                     tid <- myThreadId
                     atomically $ writeTQueue thisMailBox (do
                         lift $ modifyIORef' this' (setter (delete tid))
                         k ())
-                 ) `catch` (\ (ChangedFuture' f') -> go f' k)
+                 ) `catch` (\ (ChangedFuture' mvar'') -> go mvar'' k)
 
 data ChangedFuture' a = ChangedFuture' (Fut a)
 instance Show (ChangedFuture' a) where show _ = "ChangedFuture' exception"
@@ -216,8 +216,7 @@ sync' (Obj' _ (Cog _ thisCogToken)) callee@(Obj' _ (Cog _ calleeCogToken)) metho
                                       ]
                               lift $ putMVar fut res      -- method resolves future
                               back' otherCog)
-
-  return (Fut fut)                                                            
+  return fut                                                            
 
 
 {-# INLINABLE (<!!>) #-}
@@ -296,7 +295,7 @@ newlocal' (Obj' _ thisCog) initFun objSmartCon = do
 {-# INLINE get #-}
 -- | get, unlifted
 get :: Fut b -> IO b
-get (Fut fut) = readMVar fut >>= evaluate -- forces to whnf, so as to for sure re-raise to the caller in case of exception-inside-future
+get fut = readMVar fut >>= evaluate -- forces to whnf, so as to for sure re-raise to the caller in case of exception-inside-future
 
 
 -- it has to be in IO since it runs the read-obj-attr tests

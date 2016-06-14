@@ -13,11 +13,9 @@ import Data.Time.Clock (NominalDiffTime) -- for realtime
 -- write-once is not imposed by Haskell, but
 -- we assume our translation respects this
 -- NB: we deviate from ABS by not providing ordering of future-refs
-newtype Fut a = Fut {
-      fromFut :: MVar a
-    } deriving Eq
+type Fut a = MVar a
 
-instance Show (Fut a) where
+instance Show (MVar a) where
     show _ = "Fut"
 
 -- | an object reference is a pair of
