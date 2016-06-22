@@ -85,7 +85,7 @@ after_success:
        cabal haddock --hyperlink-source --html-location='http://hackage.haskell.org/packages/archive/$pkg/latest/doc/html';
        cp dist/test-results.html dist/doc/html/habs-runtime/;
        cabal bench;
-       cp dist/bench-results.html dist/doc/html/habs-runtime/;
+       cp dist/bench-cog-results.html dist/doc/html/habs-runtime/;
        cd dist/doc/html/habs-runtime/;
        git init;
        git config user.name "Travis CI";

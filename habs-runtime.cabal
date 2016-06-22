@@ -28,6 +28,11 @@ source-repository head
   location: git://github.com/abstools/habs-runtime.git
   branch: master
 
+Flag wait-all-cogs 
+  Description: If enabled, the ABS program will not exit when the main-block process exits, but instead when all COGS cannot progress anymore
+  Default:     False
+ 
+
 library
   build-depends:
     -- base<=4.6 (i.e. GHC<=7.6.3) not supported because of no `tryReadMVar`
@@ -63,6 +68,9 @@ library
     ABS.Runtime.TQueue
   ghc-options: -Wall -fno-warn-orphans
   hs-source-dirs: src
+  if flag(wait-all-cogs)
+    cpp-options: -DWAIT_ALL_COGS
+    build-depends: threads
 
 -- TEST SUITE
 -------------
