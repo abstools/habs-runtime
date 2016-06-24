@@ -70,8 +70,8 @@ library
   hs-source-dirs: src
   if flag(wait-all-cogs)
     cpp-options: -DWAIT_ALL_COGS
-    build-depends: threads
-
+    
+    
 -- TEST SUITE
 -------------
 

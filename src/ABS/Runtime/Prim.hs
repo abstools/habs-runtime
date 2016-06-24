@@ -38,11 +38,18 @@ import Data.Typeable
 import Data.List (delete)
 
 #ifdef WAIT_ALL_COGS
-import qualified Control.Concurrent.Thread.Group as TG
+import Control.Exception (try,mask)
+import Control.Concurrent.STM (retry)
+import Control.Concurrent.STM.TVar (TVar, newTVarIO, modifyTVar)
 import Foreign.StablePtr
 {-# NOINLINE __tg #-}
-__tg :: TG.ThreadGroup
-__tg = unsafePerformIO $ TG.new
+__tg :: TVar Int
+__tg = unsafePerformIO $ newTVarIO 0
+
+forkIO__tg action = mask $ \restore -> do
+    atomically $ modifyTVar __tg (+ 1)
+    forkIO $ 
+      try (restore action) >>= \ (_ :: Either SomeException a) -> atomically (modifyTVar __tg (subtract 1))
 #endif
 
 -- this is fine but whenever it is used
@@ -283,7 +290,7 @@ new initFun objSmartCon = do
 
                 -- create the init process on the new Cog
 #ifdef WAIT_ALL_COGS
-                _ <- TG.forkIO __tg $ do
+                _ <- forkIO__tg $ do
 #else
                 _ <- forkIO $ do
 #endif
@@ -356,7 +363,7 @@ duration tmin _tmax = threadDelay $ truncate $ tmin * 1000000
 main_is' :: (Obj' contents -> ABS' ()) -> IO ()
 main_is' mainABS' = runInUnboundThread $ do 
 #ifdef WAIT_ALL_COGS
-  _ <- TG.forkIO __tg $ do
+  _ <- forkIO__tg $ do
 #endif
       _ <- evaluate cmdOpt           -- force the cmdopt parsing, otherwise will not run even --help
       mb <- newTQueueIO
@@ -371,6 +378,6 @@ main_is' mainABS' = runInUnboundThread $ do
         back' (Cog st mb)
   t <- myThreadId
   s <- newStablePtr t
-  TG.wait __tg
+  atomically $ readTVar __tg >>= \n -> when (n >= 1) retry
   --freeStablePtr s
 #endif
