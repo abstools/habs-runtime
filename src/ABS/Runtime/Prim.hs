@@ -40,16 +40,16 @@ import Data.List (delete)
 #ifdef WAIT_ALL_COGS
 import Control.Exception (try,mask)
 import Control.Concurrent.STM (retry)
-import Control.Concurrent.STM.TVar (TVar, newTVarIO, modifyTVar)
+import Control.Concurrent.STM.TVar (TVar, newTVarIO, modifyTVar')
 import Foreign.StablePtr
 {-# NOINLINE __tg #-}
 __tg :: TVar Int
 __tg = unsafePerformIO $ newTVarIO 0
 
 forkIO__tg action = mask $ \restore -> do
-    atomically $ modifyTVar __tg (+ 1)
+    atomically $ modifyTVar' __tg (+ 1)
     forkIO $ 
-      try (restore action) >>= \ (_ :: Either SomeException a) -> atomically (modifyTVar __tg (subtract 1))
+      try (restore action) >>= \ (_ :: Either SomeException a) -> atomically (modifyTVar' __tg (subtract 1))
 #endif
 
 -- this is fine but whenever it is used
