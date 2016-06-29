@@ -1,13 +1,20 @@
 {-# LANGUAGE FlexibleInstances, ExistentialQuantification #-}
 module ABS.Runtime.Extension.Exception 
-    ( Control.Monad.Catch.Exception -- the typeclass
-    , throw, catch, Handler'(..), finally
+    ( -- ^ the ABS commands in code generation
+      throw, catch, Handler'(..), finally
+    -- ^ same exceptions as Haskell's, so import them rather than redefining.
+    -- This has the benefit of catching exceptions from the FFI
+    , PatternMatchFail (..), RecSelError (..), ArithException (DivideByZero), AssertionFailed (..)
+    -- ^ the ABS-specific builtin exceptions
+    , NullException(..), SyncOnDifferentCOG (..)     
+    , ABSException'(..), absExceptionToException', absExceptionFromException' -- the helper functions to construct instances of Exception (boilerplate)
     ) where
 
 import ABS.Runtime.Base (ABS')
 import Control.Monad.Trans.Cont (ContT (..), runContT)
 import qualified Control.Monad.Catch
-
+import Control.Exception (PatternMatchFail (..), RecSelError (..), ArithException (DivideByZero), AssertionFailed (..))
+import Data.Typeable (cast)
 
 {-# INLINE throw #-}
 throw :: (Control.Monad.Catch.MonadThrow m , Control.Monad.Catch.Exception e) => e -> m a 
@@ -38,3 +45,49 @@ catch a hs = a `Control.Monad.Catch.catch` handler
                                                     Nothing -> xs -- trick to not throw patternmatch fail here
                                                     Just action -> action)
                                 (Control.Monad.Catch.fromException e)
+
+
+-- the existential wrapper for synchronous  builtin&user-defined ABS exceptions
+data ABSException' = forall e. Control.Monad.Catch.Exception e => ABSException' e
+instance Show ABSException' where
+    show (ABSException' e) = show e
+instance Control.Monad.Catch.Exception ABSException'
+
+-- conversion back and forth to the root existential exception (SomeException)
+absExceptionToException' :: Control.Monad.Catch.Exception e => e -> Control.Monad.Catch.SomeException
+absExceptionToException' = Control.Monad.Catch.toException . ABSException'
+absExceptionFromException' :: Control.Monad.Catch.Exception e => Control.Monad.Catch.SomeException -> Maybe e
+absExceptionFromException' x = do
+    ABSException' a <- Control.Monad.Catch.fromException x
+    cast a
+
+
+
+
+-- BUILTIN ABS SYNC EXCEPTIONS
+
+-- Inherited from haskell
+-- divbyzero
+-- patternmatchfail
+-- assertionfailed
+-- recselerror
+
+-- ABS-exclusive exceptions
+data NullException = NullException deriving Show
+data SyncOnDifferentCOG = SyncOnDifferentCOG deriving Show
+
+-- we don't need this, since we have a weak notion of "soft realtime": based on when it is put back to the enabled queue, not actual execution
+--data DurationExpired = DurationExpired deriving Show
+--instance Control.Monad.Catch.Exception DurationExpired where
+--  toException = absExceptionToException'
+--  fromException = absExceptionFromException'
+
+-- boilerplate code
+instance Control.Monad.Catch.Exception NullException where
+  toException = absExceptionToException'
+  fromException = absExceptionFromException'
+
+instance Control.Monad.Catch.Exception SyncOnDifferentCOG where
+  toException = absExceptionToException'
+  fromException = absExceptionFromException'
+

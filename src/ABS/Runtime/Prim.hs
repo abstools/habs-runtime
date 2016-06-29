@@ -16,8 +16,7 @@ module ABS.Runtime.Prim
 import ABS.Runtime.Base
 import ABS.Runtime.CmdOpt
 import ABS.Runtime.TQueue (TQueue (..), newTQueueIO, writeTQueue, readTQueue)
-import ABS.Runtime.Extension.Exception () -- import instances only. we use here the evaluation throw, not the ordering throwIO (throwM)
-
+import ABS.Runtime.Extension.Exception hiding (throw, catch)
 import Control.Concurrent (ThreadId, myThreadId, newEmptyMVar, isEmptyMVar, putMVar, readMVar, forkIO, threadDelay, runInUnboundThread)
 import Control.Concurrent.STM (atomically, readTVar, readTVarIO, writeTVar)    
 
@@ -28,10 +27,9 @@ import System.IO.Unsafe (unsafePerformIO)
 
 import Prelude hiding (null)
 import Control.Monad ((<$!>), when, unless, join)
-import Control.Exception (AssertionFailed, SomeException, Exception, throw, evaluate)
+import Control.Exception (Exception, SomeException, throw, evaluate)
 import Control.Monad.Catch (catch, catches, Handler (..))
 import Data.Time.Clock.POSIX (getPOSIXTime) -- for realtime
-import System.IO (hPutStrLn, hPrint,stderr)
 import qualified System.Exit (exitFailure)
 import Data.Ratio (Ratio)
 import Data.Typeable
@@ -46,6 +44,7 @@ import Foreign.StablePtr
 __tg :: TVar Int
 __tg = unsafePerformIO $ newTVarIO 0
 
+forkIO__tg :: IO a -> IO ThreadId
 forkIO__tg action = mask $ \restore -> do
     atomically $ modifyTVar' __tg (+ 1)
     forkIO $ 
@@ -60,7 +59,7 @@ forkIO__tg action = mask $ \restore -> do
 {-# NOINLINE null #-}
 null :: Obj' Null'
 null = Obj' (unsafePerformIO $ newIORef undefined) -- its object contents
-            (Cog (error "call to null object") (error "call to null object")) -- its COG
+            (Cog (throw NullException) (throw NullException)) -- its COG
 
 {-# NOINLINE nullFuture' #-}
 nullFuture' :: Fut a
@@ -109,6 +108,21 @@ back' (Cog thisSleepTable thisMailBox) = do
     Just woken -> do
                 lift $ writeIORef thisSleepTable st' -- the sleep-table was modified, so write it back
                 woken
+handlers' :: [Handler ABS' a]
+handlers' = [ Handler $ \ (ex :: AssertionFailed) -> lift $ print ex >> System.Exit.exitFailure
+            , Handler $ \ (ex :: PatternMatchFail) -> do
+                                          when (trace_exceptions cmdOpt) (lift $ putStrLn $ "Process died upon Uncaught-Exception: " ++ show ex)
+                                          return $ throw ex  -- rethrows it inside the future-"box"
+            , Handler $ \ (ex :: RecSelError) -> do
+                                          when (trace_exceptions cmdOpt) (lift $ putStrLn $ "Process died upon Uncaught-Exception: " ++ show ex)
+                                          return $ throw ex  -- rethrows it inside the future-"box"
+            , Handler $ \ DivideByZero -> do
+                                          when (trace_exceptions cmdOpt) (lift $ putStrLn $ "Process died upon Uncaught-Exception: " ++ show DivideByZero)
+                                          return $ throw DivideByZero  -- rethrows it inside the future-"box"
+            , Handler $ \ (ex :: ABSException') -> do
+                                          when (trace_exceptions cmdOpt) (lift $ putStrLn $ "Process died upon Uncaught-Exception: " ++ show ex)
+                                          return $ throw ex  -- rethrows it inside the future-"box"                                       
+            ]
 
 -- Translation-time transformation
 -- an await f? & x > 2 & g? & y < 4;
@@ -212,7 +226,7 @@ sync' :: Obj' this -> Obj' a -> (Obj' a -> ABS' r) -> ABS' r
 sync' (Obj' _ (Cog _ thisCogToken)) callee@(Obj' _ (Cog _ calleeCogToken)) methodPartiallyApplied = 
     if calleeCogToken == thisCogToken
     then methodPartiallyApplied callee
-    else error "SyncCalltoDifferentCOG"
+    else throw SyncOnDifferentCOG
 
 {-# INLINE (<..>) #-}
 -- | optimized sync, by not running same-cog-check. Used only by the generation when stumbled on "this.m()".
@@ -225,12 +239,7 @@ sync' (Obj' _ (Cog _ thisCogToken)) callee@(Obj' _ (Cog _ calleeCogToken)) metho
 (<!>) obj@(Obj' _ otherCog@(Cog _ otherMailBox)) methodPartiallyApplied = do
   fut <- newEmptyMVar 
   atomically $ writeTQueue otherMailBox (do
-                              res <- methodPartiallyApplied obj `catches` 
-                                      [ Handler $ \ (ex :: AssertionFailed) -> lift $ hPrint stderr ex >> System.Exit.exitFailure
-                                      --, Handler $ \ (ex :: SomeException) -> do
-                                      --    when (trace_exceptions cmdOpt) (lift $ hPutStrLn stderr $ "Process died upon Uncaught-Exception: " ++ show ex)
-                                      --    return $ throw ex  -- rethrows it inside the future-"box"                                       
-                                      ]
+                              res <- methodPartiallyApplied obj `catches` handlers'
                               lift $ putMVar fut res      -- method resolves future
                               back' otherCog)
   return fut                                                            
@@ -242,12 +251,7 @@ sync' (Obj' _ (Cog _ thisCogToken)) callee@(Obj' _ (Cog _ calleeCogToken)) metho
 (<!!>) obj@(Obj' _ otherCog@(Cog _ otherMailBox)) methodPartiallyApplied = 
   atomically $ writeTQueue otherMailBox (do
                -- we throw away the result (if we had "destiny" primitive then this optimization could not be easily applied
-               (() <$ methodPartiallyApplied obj) `catches`
-                                      [ Handler $ \ (ex :: AssertionFailed) -> lift $ hPrint stderr ex >> System.Exit.exitFailure
-                                      --, Handler $ \ (ex :: SomeException) ->
-                                      --    when (trace_exceptions cmdOpt) (lift $ hPutStrLn stderr $ "Process died upon Uncaught-Exception: " ++ show ex)
-                                      --    -- does not need to rethrow it (store it) inside the future, because it will not be read anyway
-                                      ]
+               (() <$ methodPartiallyApplied obj) `catches` handlers'
                back' otherCog)
 
 {-# INLINABLE awaitSugar' #-}
@@ -260,12 +264,7 @@ awaitSugar' :: Obj' this
 awaitSugar' (Obj' _ thisCog@(Cog _ thisMailBox)) lhs obj@(Obj' _ otherCog@(Cog _ otherMailBox)) methodPartiallyApplied = 
   callCC (\ k -> do
     lift $ atomically $ writeTQueue otherMailBox (do
-               res <- methodPartiallyApplied obj `catches`
-                                      [ Handler $ \ (ex :: AssertionFailed) -> lift $ hPrint stderr ex >> System.Exit.exitFailure
-                                      --, Handler $ \ (ex :: SomeException) -> do
-                                      --    when (trace_exceptions cmdOpt) (lift $ hPutStrLn stderr $ "Process died upon Uncaught-Exception: " ++ show ex)
-                                      --    return $ throw ex  -- rethrows it inside the future-"box"                                       
-                                      ]
+               res <- methodPartiallyApplied obj `catches` handlers'
                lift $ atomically $ writeTQueue thisMailBox (do
                                                               lift $ lhs $! res -- whnf to force the exception at the caller side TODO: to be tested , try also evaluate
                                                               k () )
@@ -369,11 +368,7 @@ main_is' mainABS' = runInUnboundThread $ do
       mb <- newTQueueIO
       st <- newIORef []
       evalContT $ do
-        (mainABS' $ Obj' (error "runtime error: the main ABS' block tried to call 'this'") (Cog st mb)) `catches`
-          [ Handler $ \ (ex :: AssertionFailed) -> lift $ hPrint stderr ex >> System.Exit.exitFailure
-            -- the main block does not have an associated future to store the exception
-          --, Handler $ \ (ex :: SomeException) -> when (trace_exceptions cmdOpt) (lift $ hPutStrLn stderr $ "Process died upon Uncaught-Exception: " ++ show ex)
-          ]
+        (mainABS' $ Obj' (error "runtime error: the main ABS' block tried to call 'this'") (Cog st mb)) `catches` handlers'
 #ifdef WAIT_ALL_COGS
         back' (Cog st mb)
   t <- myThreadId
