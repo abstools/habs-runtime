@@ -31,6 +31,7 @@ import Control.Exception (Exception, SomeException, throw, evaluate)
 import Control.Monad.Catch (catch, catches, Handler (..))
 import Data.Time.Clock.POSIX (getPOSIXTime) -- for realtime
 import qualified System.Exit (exitFailure)
+import System.IO (hSetBuffering, BufferMode (LineBuffering), hPutStrLn, hPrint, stderr)
 import Data.Ratio (Ratio)
 import Data.Typeable
 import Data.List (delete)
@@ -109,18 +110,18 @@ back' (Cog thisSleepTable thisMailBox) = do
                 lift $ writeIORef thisSleepTable st' -- the sleep-table was modified, so write it back
                 woken
 handlers' :: [Handler ABS' a]
-handlers' = [ Handler $ \ (ex :: AssertionFailed) -> lift $ print ex >> System.Exit.exitFailure
+handlers' = [ Handler $ \ (ex :: AssertionFailed) -> lift $ hPrint stderr ex >> System.Exit.exitFailure
             , Handler $ \ (ex :: PatternMatchFail) -> do
-                                          when (trace_exceptions cmdOpt) (lift $ putStrLn $ "Process died upon Uncaught-Exception: " ++ show ex)
+                                          when (trace_exceptions cmdOpt) (lift $ hPutStrLn stderr $ "Process died upon Uncaught-Exception: " ++ show ex)
                                           return $ throw ex  -- rethrows it inside the future-"box"
             , Handler $ \ (ex :: RecSelError) -> do
-                                          when (trace_exceptions cmdOpt) (lift $ putStrLn $ "Process died upon Uncaught-Exception: " ++ show ex)
+                                          when (trace_exceptions cmdOpt) (lift $ hPutStrLn stderr $ "Process died upon Uncaught-Exception: " ++ show ex)
                                           return $ throw ex  -- rethrows it inside the future-"box"
             , Handler $ \ DivideByZero -> do
-                                          when (trace_exceptions cmdOpt) (lift $ putStrLn $ "Process died upon Uncaught-Exception: " ++ show DivideByZero)
+                                          when (trace_exceptions cmdOpt) (lift $ hPutStrLn stderr $ "Process died upon Uncaught-Exception: " ++ show DivideByZero)
                                           return $ throw DivideByZero  -- rethrows it inside the future-"box"
             , Handler $ \ (ex :: ABSException') -> do
-                                          when (trace_exceptions cmdOpt) (lift $ putStrLn $ "Process died upon Uncaught-Exception: " ++ show ex)
+                                          when (trace_exceptions cmdOpt) (lift $ hPutStrLn stderr $ "Process died upon Uncaught-Exception: " ++ show ex)
                                           return $ throw ex  -- rethrows it inside the future-"box"                                       
             ]
 
@@ -360,7 +361,7 @@ duration tmin _tmax = threadDelay $ truncate $ tmin * 1000000
 -- the code-generator will safely catch if a main contains calls to this. This runtime, however, does not do such checks;
 -- if the user passes a main that uses this, the program will err.
 main_is' :: (Obj' contents -> ABS' ()) -> IO ()
-main_is' mainABS' = runInUnboundThread $ do 
+main_is' mainABS' = hSetBuffering stderr LineBuffering >> runInUnboundThread $ do
 #ifdef WAIT_ALL_COGS
   _ <- forkIO__tg $ do
 #endif
