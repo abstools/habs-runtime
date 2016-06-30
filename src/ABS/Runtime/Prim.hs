@@ -361,7 +361,9 @@ duration tmin _tmax = threadDelay $ truncate $ tmin * 1000000
 -- the code-generator will safely catch if a main contains calls to this. This runtime, however, does not do such checks;
 -- if the user passes a main that uses this, the program will err.
 main_is' :: (Obj' contents -> ABS' ()) -> IO ()
-main_is' mainABS' = hSetBuffering stderr LineBuffering >> runInUnboundThread $ do
+main_is' mainABS' = do
+ hSetBuffering stderr LineBuffering
+ runInUnboundThread $ do
 #ifdef WAIT_ALL_COGS
   _ <- forkIO__tg $ do
 #endif
