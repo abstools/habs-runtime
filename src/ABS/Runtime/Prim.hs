@@ -11,6 +11,7 @@ module ABS.Runtime.Prim
     , (<$!>)
     -- * primitives for soft-realtime extension
     , now, duration, awaitDuration'
+    , random
     ) where
 
 import ABS.Runtime.Base
@@ -35,6 +36,7 @@ import System.IO (hSetBuffering, BufferMode (LineBuffering), hPutStrLn, hPrint, 
 import Data.Ratio (Ratio)
 import Data.Typeable
 import Data.List (delete)
+import System.Random (randomRIO)
 
 #ifdef WAIT_ALL_COGS
 import Control.Exception (try,mask)
@@ -353,6 +355,14 @@ now = getPOSIXTime
 duration :: Ratio Int -> Ratio Int -> IO ()
 duration tmin _tmax = threadDelay $ truncate $ tmin * 1000000
 
+
+{-# INLINE random #-}
+-- | Note: this is multicore-safe but not multicore-scalable, because it uses underneath atomicModifyIORef
+random :: Int -> IO Int
+random i = randomRIO (0, case compare i 0 of
+                            GT -> i-1
+                            EQ -> 0
+                            LT -> i+1)
 
 {-# INLINE main_is' #-}
 -- | This function takes an ABS'' main function in the module and executes the ABS' program.

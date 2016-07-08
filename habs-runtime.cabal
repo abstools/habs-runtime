@@ -48,6 +48,8 @@ library
     exceptions,
     -- for soft-realtime extension
     time,
+    -- for implementing the random eff-exp
+    random,
     cmdargs
   exposed-modules:
     -- name-clash-avoiding wrapper module used by the codegen 
