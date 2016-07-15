@@ -7,6 +7,8 @@ import ABS.Runtime.TQueue (TQueue) -- mailbox
 import Data.IORef (IORef)
 import Control.Monad.Trans.Cont (ContT)
 import Data.Time.Clock (NominalDiffTime) -- for realtime
+import Control.Distributed.Process (Process, ProcessId)
+import Data.IntMap (IntMap)
 
 -- | a future reference is a write-once locking var
 --
@@ -14,6 +16,8 @@ import Data.Time.Clock (NominalDiffTime) -- for realtime
 -- we assume our translation respects this
 -- NB: we deviate from ABS by not providing ordering of future-refs
 type Fut a = MVar a
+
+type RFut = Int
 
 instance Show (MVar a) where
     show _ = "Fut"
@@ -23,6 +27,8 @@ instance Show (MVar a) where
 -- 2) its attributes placed in a mutable variable=IORef
 -- NB: we deviate from ABS by not providing ordering of object-refs
 data Obj' contents = Obj' (IORef contents) !Cog 
+
+type RObj = ProcessId
 
 -- no need for Eq (Obj a). it is done by boilerplate generation of instance Eq I
 -- instance Eq I where
@@ -40,12 +46,17 @@ data Cog = Cog (IORef SleepTable) (TQueue (ABS' ()))
 instance Eq Cog where
     (Cog token1 _) == (Cog token2 _) = token1 == token2
 
-type SleepTable = [ (IO Bool     -- test function
-                    ,ABS' ())  -- continuation
-                  ]
+type SleepTable = ( [ ( IO Bool     -- test function
+                      , ABS' ())    -- continuation
+                    ]
+                  , IntMap (Int, ABS' ())
+                  , Int -- counter to pick unique remote future refs
+                  )
 
-type ABS' = ContT () IO
+type ABS' = ContT () Process
 
+-- local variables in the statement are mutable references
+type IORef' = IORef                                                                   
 
 -- | Subtyping-relation for ABS objects (as a multiparam typeclass)
 class Sub' sub sup where
@@ -55,9 +66,6 @@ class Sub' sub sup where
 -- self instance
 instance Sub' a a where
     up' x = x
-
--- local variables in the statement are mutable references
-type IORef' = IORef
 
 data Null'
 

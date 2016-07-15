@@ -50,6 +50,12 @@ library
     time,
     -- for implementing the random eff-exp
     random,
+    -- for storing continuations waiting on remote futures in an IntMap
+    containers,
+    -- for distributed communication
+    distributed-process,
+    network-transport-tcp,
+    distributed-process-simplelocalnet,
     cmdargs
   exposed-modules:
     -- name-clash-avoiding wrapper module used by the codegen 

@@ -10,6 +10,7 @@ import System.Environment (getArgs, withArgs)
 
 import System.IO
 import Control.Monad (replicateM_, replicateM)
+import Control.Monad.Trans.Class (lift)
 import Control.Monad.IO.Class (liftIO)
 import Control.Concurrent (threadDelay)
 import Data.IORef (readIORef, modifyIORef')
@@ -20,7 +21,7 @@ main = do
   withArgs ("-j1":args) $ -- don't run tests in parallel because it messes output
        hSetBuffering stderr LineBuffering >>
        defaultMainWithIngredients (htmlRunner:defaultIngredients)(
-         localOption (mkTimeout 1000000) $ -- timeouts any test at 1s
+         localOption (mkTimeout 10000000) $ -- timeouts any test at 10s
          testGroup "coop-scheduling"
                      [ testCase "case_fifo" case_fifo
                      , testCase "case_future_forwarding" case_future_forwarding
@@ -48,8 +49,8 @@ case_fifo = do
           println' "m2"
 
   let main = withArgs [] $ main_is' (\ this -> do
-                o1 <- liftIO $ newlocal' this (const $ return ()) c'
-                o2 <- liftIO $ newlocal' this (const $ return ()) c'
+                o1 <- lift $ newlocal' this (const $ return ()) c'
+                o2 <- lift $ newlocal' this (const $ return ()) c'
                 fs <- replicateM 100 (liftIO $ do
                                        f1 <- o1 <!> method1
                                        f2 <- o2 <!> method2
@@ -80,8 +81,8 @@ case_future_forwarding = do
           return res'
 
   let main = withArgs [] $ main_is' (\ this -> do
-                o1 <- liftIO $ new (const $ return ()) c'
-                o2 <- liftIO $ new (const $ return ()) c'
+                o1 <- lift $ new (const $ return ()) c'
+                o2 <- lift $ new (const $ return ()) c'
                 replicateM_ 100 (do
                                        f1 <- liftIO $ o1 <!> method1
                                        f2 <- liftIO $ o2 <!> method2 f1
@@ -119,7 +120,7 @@ case_await_boolean = do
           return x
 
   let main = withArgs [] $ main_is' (\ this -> do
-                o1 <- liftIO $ new (const $ return ()) c'
+                o1 <- lift $ new (const $ return ()) c'
                 fs <- replicateM 100 (liftIO $ do
                                  f1 <- o1 <!> dec
                                  f2 <- o1 <!> inc
@@ -133,7 +134,7 @@ case_await_boolean = do
                       )
 
   let main_local = withArgs [] $ main_is' (\ this -> do
-                o1 <- liftIO $ newlocal' this (const $ return ()) c'
+                o1 <- lift $ newlocal' this (const $ return ()) c'
                 fs <- replicateM 100 (liftIO $ do
                                  f1 <- o1 <!> dec
                                  f2 <- o1 <!> inc
