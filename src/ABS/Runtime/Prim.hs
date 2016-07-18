@@ -12,6 +12,7 @@ module ABS.Runtime.Prim
     -- * primitives for soft-realtime extension
     , now, duration, awaitDuration'
     , random
+    , findWoken
     ) where
 
 import ABS.Runtime.Base

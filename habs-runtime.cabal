@@ -58,9 +58,6 @@ library
     distributed-process-simplelocalnet,
     cmdargs
   exposed-modules:
-    -- name-clash-avoiding wrapper module used by the codegen 
-    ABS.Runtime
-  other-modules:
     -- data structures used by the Runtime
     ABS.Runtime.Base,
     -- runtime building-blocks that reflect the ABS primitives
