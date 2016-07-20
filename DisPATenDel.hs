@@ -52,15 +52,15 @@ import Data.Vector.Mutable (IOVector(..))
 
 import Data.Vector.Mutable (unsafeNew)
 
-import Data.Vector.Mutable (read)
+import Data.Vector.Mutable (unsafeRead)
 
-import Data.Vector.Mutable (write)
+import Data.Vector.Mutable (unsafeWrite)
 
 import Data.Vector (Vector(..))
 
 import Data.Vector (fromList)
 
-import Data.Vector (indexM)
+import Data.Vector (unsafeIndexM)
 
 import System.Random.MWC (GenIO(..))
 
@@ -88,19 +88,22 @@ default (Int, Rat)
 
 
 
-
+{-# INLINE div #-}
 div :: _ => Int -> Int -> Int
 
 div n d = (quot (I'.fromIntegral n) (I'.fromIntegral d))
 
+{-# INLINE mod #-}
 mod :: _ => Int -> Int -> Int
 
 mod n d = (rem (I'.fromIntegral n) (I'.fromIntegral d))
 
+{-# INLINE diff #-}
 diff :: _ => TimeSpec -> TimeSpec -> TimeSpec
 
 diff a b = (diffTimeSpec a b)
 
+{-# INLINE toVector #-}
 toVector :: _ => forall a . List a -> Vector a
 
 toVector l = (fromList l)
@@ -118,7 +121,7 @@ kinit :: _ => Int
 kinit = ((d) * ((d) + 1))
 
 workers :: _ => Int
-workers = 2
+workers = 4
 
 isElem :: _ => forall a . a -> List a -> Bool
 
@@ -127,8 +130,8 @@ isElem l ls
         [] -> False
         (l_ : ls_) -> ((l == l_) || (isElem l ls_))
 
+{-# ILNINE localIndex #-}
 localIndex :: _ => Int -> Int
-
 localIndex index
   = (((div
          (((div ((I'.fromIntegral index) - 1) (d)) + 1) - ((d) + 2))
@@ -136,8 +139,8 @@ localIndex index
         * (d))
        + (mod ((I'.fromIntegral index) - 1) (d)))
 
+{-# ILNINE actorIndex #-}
 actorIndex :: _ => Int -> Int
-
 actorIndex index
   = (mod (((div ((I'.fromIntegral index) - 1) (d)) + 1) - ((d) + 2))
        (workers))
@@ -172,9 +175,9 @@ instance IWorker' a => Sub' (Obj' a) IWorker where
 
 
 data Worker = Worker{ws2'Worker :: Vector RObj,
-                     workerId'Worker :: Int, size'Worker :: Int,
+                     workerId'Worker :: !Int, size'Worker :: !Int,
                      initArr'Worker :: IOVector (Fut Int), g'Worker :: GenIO,
-                     arr'Worker :: IOVector (Fut Int), aliveDelegates'Worker :: Int}
+                     arr'Worker :: IOVector (Fut Int), aliveDelegates'Worker :: !Int}
 smart'Worker workerId size
   = Worker{workerId'Worker = workerId, size'Worker = size,
            ws2'Worker = (I'.error "foreign object not initialized"),
@@ -225,7 +228,7 @@ instance IWorker' Worker where
                source :: IORef' Int <- I'.liftIO(I'.newIORef 0)
                target :: IORef' Int <- I'.liftIO(I'.newIORef 0)
                u :: IORef' Int <- I'.liftIO(I'.newIORef 0)
-               fd :: IORef' (Fut Unit) <- I'.liftIO(I'.newIORef nullFuture')
+               -- fd :: IORef' (Fut Unit) <- I'.liftIO(I'.newIORef nullFuture')
                while
                  ((<=) <$!> (I'.fromIntegral <$!> I'.readIORef i) <*> (I'.pure num))
                  (do I'.liftIO(I'.writeIORef j 1)
@@ -288,7 +291,7 @@ instance IWorker' Worker where
                                                      (I'.fromIntegral <$!> I'.readIORef u))
                                                   =<<
                                                   (I'.join
-                                                     (((I'.pure read <*>
+                                                     (((I'.pure unsafeRead <*>
                                                           I'.pure (arr'Worker this''))
                                                          <*>
                                                          (I'.pure localIndex <*>
@@ -301,7 +304,7 @@ instance IWorker' Worker where
                                           (get =<<
                                              (\ this'' ->
                                                 (I'.join
-                                                   (((I'.pure read <*>
+                                                   (((I'.pure unsafeRead <*>
                                                         I'.pure (initArr'Worker this''))
                                                        <*>
                                                        (I'.fromIntegral <$!>
@@ -346,7 +349,7 @@ instance IWorker' Worker where
                                                           (I'.fromIntegral <$!> I'.readIORef u))
                                                        =<<
                                                        (I'.join
-                                                          (((I'.pure read <*>
+                                                          (((I'.pure unsafeRead <*>
                                                                I'.pure (arr'Worker this''))
                                                               <*>
                                                               (I'.pure localIndex <*>
@@ -362,7 +365,7 @@ instance IWorker' Worker where
                                                               (I'.newIORef =<<
                                                                  (\ this'' ->
                                                                     (I'.join
-                                                                       (((I'.pure indexM <*>
+                                                                       (((I'.pure unsafeIndexM <*>
                                                                             I'.pure
                                                                               (ws2'Worker this''))
                                                                            <*>
@@ -391,17 +394,18 @@ instance IWorker' Worker where
                                                           + 1)})
                                              <$!> I'.readIORef this'))
                                      I'.liftIO
-                                       (I'.writeIORef fd =<<
-                                          ((this <!>) =<<
+                                       -- (I'.writeIORef fd =<<
+                                          ((this <!!>) =<<
                                              I'.pure delegate''Worker <*> I'.readIORef fp <*>
-                                               (I'.fromIntegral <$!> I'.readIORef target)))
+                                               (I'.fromIntegral <$!> I'.readIORef target))
+                                       -- )
                                   else
                                   do I'.liftIO
                                        (I'.writeIORef u =<<
                                           (get =<<
                                              (\ this'' ->
                                                 (I'.join
-                                                   (((I'.pure read <*>
+                                                   (((I'.pure unsafeRead <*>
                                                         I'.pure (initArr'Worker this''))
                                                        <*>
                                                        (I'.fromIntegral <$!>
@@ -437,7 +441,7 @@ instance IWorker' Worker where
                                                           (I'.fromIntegral <$!> I'.readIORef u))
                                                        =<<
                                                        (I'.join
-                                                          (((I'.pure read <*>
+                                                          (((I'.pure unsafeRead <*>
                                                                I'.pure (arr'Worker this''))
                                                               <*>
                                                               (I'.pure localIndex <*>
@@ -455,10 +459,17 @@ instance IWorker' Worker where
                        (I'.writeIORef temp =<<
                           ((+) <$!> (I'.fromIntegral <$!> I'.readIORef temp) <*>
                              ((*) <$!> (I'.pure d) <*> (I'.pure workers))))
+                      
                      (\ this'' ->
-                        I'.when ((I'.fromIntegral (aliveDelegates'Worker this'')) >= 10)
-                          (do awaitFuture' this =<< I'.liftIO(I'.readIORef fd)))
-                       =<< I'.liftIO(I'.readIORef this'))
+                         -- I'.when ((I'.fromIntegral (aliveDelegates'Worker this'')) >= 10)
+                         -- (do awaitFuture' this =<< I'.liftIO(I'.readIORef fd)))
+                         -- =<< I'.liftIO(I'.readIORef this'))
+                         I'.when ((I'.fromIntegral (aliveDelegates'Worker this'')) >= 1000)
+                           (awaitBool' this
+                               (\ this'' ->
+                                     ((I'.fromIntegral (aliveDelegates'Worker this'')) < 100))))
+                        =<< I'.liftIO(I'.readIORef this')
+                 )
                awaitBool' this
                  (\ this'' ->
                     ((I'.fromIntegral (aliveDelegates'Worker this'')) == 0))
@@ -496,7 +507,7 @@ instance IWorker' Worker where
                            _ <- I'.liftIO
                                   ((\ this'' ->
                                       (I'.join
-                                         ((((I'.pure write <*> I'.pure (initArr'Worker this'')) <*>
+                                         ((((I'.pure unsafeWrite <*> I'.pure (initArr'Worker this'')) <*>
                                               (I'.fromIntegral <$!> I'.readIORef index))
                                              <*> I'.readIORef c))))
                                      =<< I'.readIORef this')
@@ -516,7 +527,7 @@ instance IWorker' Worker where
                      _ <- I'.liftIO
                             ((\ this'' ->
                                 (I'.join
-                                   ((((I'.pure write <*> I'.pure (arr'Worker this'')) <*>
+                                   ((((I'.pure unsafeWrite <*> I'.pure (arr'Worker this'')) <*>
                                         (I'.fromIntegral <$!> I'.readIORef index))
                                        <*> I'.readIORef c))))
                                =<< I'.readIORef this')
@@ -531,7 +542,7 @@ instance IWorker' Worker where
                       (I'.writeIORef c =<<
                          (\ this'' ->
                             (I'.join
-                               (((I'.pure read <*> I'.pure (arr'Worker this'')) <*>
+                               (((I'.pure unsafeRead <*> I'.pure (arr'Worker this'')) <*>
                                    (I'.pure localIndex <*> I'.pure (I'.fromIntegral source))))))
                            =<< I'.readIORef this')
                     awaitFuture' this =<< I'.liftIO(I'.readIORef c)
@@ -540,7 +551,7 @@ instance IWorker' Worker where
                       (I'.writeIORef c =<<
                          (\ this'' ->
                             (I'.join
-                               (((I'.pure read <*> I'.pure (initArr'Worker this'')) <*>
+                               (((I'.pure unsafeRead <*> I'.pure (initArr'Worker this'')) <*>
                                    I'.pure (I'.fromIntegral source)))))
                            =<< I'.readIORef this')
                I'.liftIO(get =<< I'.readIORef c)
@@ -574,7 +585,7 @@ delegate''Worker ft target this@(Obj' this' _)
                         (pro_try =<<
                            (\ this'' ->
                               (I'.join
-                                 (((I'.pure read <*> I'.pure (arr'Worker this'')) <*>
+                                 (((I'.pure unsafeRead <*> I'.pure (arr'Worker this'')) <*>
                                      (I'.pure localIndex <*>
                                         (I'.fromIntegral <$!> I'.readIORef i))))))
                              =<< I'.readIORef this'))
@@ -614,7 +625,7 @@ delegate''Worker ft target this@(Obj' this' _)
                                      (I'.newIORef =<<
                                         (\ this'' ->
                                            (I'.join
-                                              (((I'.pure indexM <*> I'.pure (ws2'Worker this'')) <*>
+                                              (((I'.pure unsafeIndexM <*> I'.pure (ws2'Worker this'')) <*>
                                                   (I'.pure actorIndex <*>
                                                      (I'.fromIntegral <$!> I'.readIORef u2))))))
                                           =<< I'.readIORef this')
@@ -633,7 +644,7 @@ delegate''Worker ft target this@(Obj' this' _)
                   (\ e1' -> pro_give e1' =<< (I'.fromIntegral <$!> I'.readIORef u))
                     =<<
                     (I'.join
-                       (((I'.pure read <*> I'.pure (arr'Worker this'')) <*>
+                       (((I'.pure unsafeRead <*> I'.pure (arr'Worker this'')) <*>
                            (I'.pure localIndex <*> I'.pure (I'.fromIntegral target))))))
                  =<< I'.readIORef this')
             I'.liftIO
@@ -643,21 +654,22 @@ delegate''Worker ft target this@(Obj' this' _)
                               ((I'.fromIntegral (aliveDelegates'Worker this'')) - 1)})
                     <$!> I'.readIORef this'))
 
-{-# INLINABLE (<!>) #-}
+
+--{-# INLINABLE (<!>) #-}
 -- | async, unliftIOed
 --(<!>) :: Obj' a -> (Obj' a -> ABS' b) -> IO (Fut b)
-(<!>) obj@(Obj' _ otherCog@(Cog _ otherMailBox)) methodPartiallyApplied = do
-  mvar <- I'.newEmptyMVar 
-  atomically $ writeTQueue otherMailBox (do
-                              res <- methodPartiallyApplied obj
-                              I'.liftIO $ I'.putMVar mvar res      -- method resolves future
-                              back' obj)
-  return mvar                                                            
+-- (<!>) obj@(Obj' _ otherCog@(Cog _ otherMailBox)) methodPartiallyApplied = do
+--   mvar <- I'.newEmptyMVar 
+--   atomically $ writeTQueue otherMailBox (do
+--                               res <- methodPartiallyApplied obj
+--                               I'.liftIO $ I'.putMVar mvar res      -- method resolves future
+--                               back' obj)
+--   return mvar                                                            
 
 
 {-# INLINABLE (<!!>) #-}
 -- | fire&forget async, unliftIOed
---(<!!>) :: Obj' a -> (Obj' a -> ABS' b) -> IO ()
+(<!!>) :: Obj' Worker -> (Obj' Worker -> ABS' b) -> I'.IO ()
 (<!!>) obj@(Obj' _ otherCog@(Cog _ otherMailBox)) methodPartiallyApplied = 
   atomically $ writeTQueue otherMailBox (do
                -- we throw away the result (if we had "destiny" primitive then this optimization could not be easily applied
@@ -666,7 +678,7 @@ delegate''Worker ft target this@(Obj' this' _)
 
 
 {-# INLINABLE awaitFuture' #-}
---awaitFuture' :: Obj' this -> Fut a -> ABS' ()
+awaitFuture' :: Obj' Worker -> Fut a -> ABS' ()
 awaitFuture' obj@(Obj' _ thisCog@(Cog _ thisMailBox)) mvar = do
   empty <- I'.liftIO $ I'.isEmptyMVar mvar -- according to ABS' semantics it should continue right away, hence this test.
   I'.when empty $
@@ -677,11 +689,7 @@ awaitFuture' obj@(Obj' _ thisCog@(Cog _ thisMailBox)) mvar = do
                   back' obj)
 
 
- 
-
-
-
-
+{-# INLINABLE get_i #-}
 get_i :: Obj' this -> RFut -> Process Int
 get_i (Obj' _ (Cog thisSleepTable _)) rfut = do
   (bt,ft,ct) <- I'.liftIO $ I'.readIORef thisSleepTable
@@ -693,7 +701,8 @@ get_i (Obj' _ (Cog thisSleepTable _)) rfut = do
                                     (\ (res,_) -> return res)
                            ]
 
-request_i :: IWorker' this => Obj' this -> Int -> RObj -> Process RFut
+{-# INLINABLE request_i #-}
+request_i :: Obj' Worker -> Int -> RObj -> Process RFut
 request_i (Obj' _ (Cog thisSleepTable _ )) param callee = do
   (bt, ft, ct) <- I'.liftIO $ I'.readIORef thisSleepTable
   I'.liftIO $ I'.writeIORef thisSleepTable (bt,ft,ct+1)
@@ -701,6 +710,7 @@ request_i (Obj' _ (Cog thisSleepTable _ )) param callee = do
   callee `send` (self, param, ct)
   return ct
 
+{-# ILNINABLE init_i #-}
 init_i :: Obj' this -> [RObj] -> RObj -> Process RFut
 init_i (Obj' _ (Cog thisSleepTable _ )) param callee = do
   (bt, ft, ct) <- I'.liftIO $ I'.readIORef thisSleepTable
@@ -709,6 +719,7 @@ init_i (Obj' _ (Cog thisSleepTable _ )) param callee = do
   return ct
 
 
+{-# INLINABLE run_i #-}
 run_i :: Obj' this -> RObj -> Process RFut
 run_i (Obj' _ (Cog thisSleepTable _ ))callee = do
   (bt, ft, ct) <- I'.liftIO $ I'.readIORef thisSleepTable
@@ -717,7 +728,8 @@ run_i (Obj' _ (Cog thisSleepTable _ ))callee = do
   return ct
 
 
-await_i :: IWorker' this => Obj' this -> RFut -> ABS' ()
+{-# INLINABLE await_i #-}
+await_i :: Obj' Worker -> RFut -> ABS' ()
 await_i obj@(Obj' _ thisCog@(Cog thisSleepTable _)) rfut = do
   (bt,ft,ct) <- I'.liftIO $ I'.readIORef thisSleepTable
   I'.when (rfut `IM.notMember` ft) $ callCC (\ k -> do
@@ -725,7 +737,7 @@ await_i obj@(Obj' _ thisCog@(Cog thisSleepTable _)) rfut = do
     back' obj
     )
 
-back' :: IWorker' this => Obj' this -> ABS' ()
+back' :: Obj' Worker -> ABS' ()
 back' obj@(Obj' _ thisCog@(Cog thisSleepTable thisMailBox)) = do
   st@(bt,ft,ct) <- I'.liftIO $ I'.readIORef thisSleepTable
   (mwoken, st') <- I'.liftIO $ findWoken st                                                  
