@@ -6,7 +6,7 @@ module ABS.Runtime.Prim
     , awaitFutureField', ChangedFuture' (..)
     , new, newlocal'
     , sync', (<..>), (<!>), (<!!>) --, awaitSugar'
-    , skip
+    , skip, main_is'
     , while, while'
     , (<$!>)
     -- * primitives for soft-realtime extension
@@ -44,6 +44,7 @@ import qualified Data.IntMap as IM (empty, lookup, delete, insert, notMember)
 import Network.Transport.TCP (createTransport, defaultTCPParameters)
 import Control.Distributed.Process (Process, spawnLocal, receiveWait, match, matchIf, matchSTM, send)
 import Control.Distributed.Process.Node
+import Control.Distributed.Process.Backend.SimpleLocalnet
 
 -- this is fine but whenever it is used
 -- we do (unsafeCoerce null :: MVar a) == d
@@ -357,6 +358,31 @@ random i = randomRIO (0, case compare i 0 of
                                     GT -> i-1
                                     EQ -> 0
                                     LT -> i+1)
+
+{-# INLINE main_is' #-}
+-- | This function takes an ABS'' main function in the module and executes the ABS' program.
+--
+-- Note the mainABS' function expects a this object as input. This is only for unifying the method-block generation;
+-- the code-generator will safely catch if a main contains calls to this. This runtime, however, does not do such checks;
+-- if the user passes a main that uses this, the program will err.
+main_is' :: (Obj' contents -> ABS' ()) -> IO ()
+main_is' mainABS' = do
+ hSetBuffering stderr LineBuffering
+ _ <- evaluate cmdOpt           -- force the cmdopt parsing, otherwise will not run even --help
+ backend <- initializeBackend (ip cmdOpt) (port cmdOpt) initRemoteTable
+ if master cmdOpt
+  then do
+    mb <- newTQueueIO
+    st <- newIORef ([],IM.empty,0)     
+    startMaster backend (\ peers -> do
+      liftIO (print $ "Slaves:" ++ show peers)
+      evalContT $ (mainABS' $ Obj' (error "runtime error: the main ABS' block tried to call 'this'") (Cog st mb)) `catches` handlers')
+  else startSlave backend
+
+ --Right t <- createTransport "127.0.0.1" "10501" defaultTCPParameters
+ --node <- newLocalNode t initRemoteTable
+ 
+
 
 
 

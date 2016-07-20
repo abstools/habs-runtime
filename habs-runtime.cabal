@@ -55,6 +55,7 @@ library
     -- for distributed communication
     distributed-process,
     network-transport-tcp,
+    distributed-process-simplelocalnet,
     cmdargs
   exposed-modules:
     -- data structures used by the Runtime

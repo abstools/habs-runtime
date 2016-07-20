@@ -11,7 +11,7 @@ cmdOpt = unsafePerformIO (cmdArgs cmdOptSpec)
 
 data CmdOpt = CmdOpt {
   trace_exceptions :: Bool -- ^ The COGs hide any uncaught exceptions by default. This option logs to the stdout an uncaught exception. Used for debugging
-  , slaves :: [String]
+  , master :: Bool
   , ip :: String
   , port :: String            
                      } deriving (Data, Typeable)
@@ -19,9 +19,9 @@ data CmdOpt = CmdOpt {
 cmdOptSpec :: CmdOpt
 cmdOptSpec = CmdOpt { 
  trace_exceptions = def &= help "The COGs hide any uncaught exceptions by default. This option logs to the stdout an uncaught exception. Used for debugging"
+ , master = def &= help "Set if it is the master node, otherwise slave node"    
  , ip = "127.0.0.1"
  , port = "10501"
- , slaves = def &= args
              }
              &= program "habs-runtime" 
              &= help "The ABS-Haskell runtime" 

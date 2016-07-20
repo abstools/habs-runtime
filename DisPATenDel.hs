@@ -18,9 +18,8 @@ import qualified Data.IntMap as IM (empty, lookup, delete, insert, notMember)
 import Network.Transport.TCP (createTransport, defaultTCPParameters)
 import Control.Distributed.Process (Process, spawn, spawnLocal, receiveWait, match, matchIf, matchSTM, send, expect, ProcessId,getSelfPid)
 import Control.Distributed.Process.Node
-import Control.Distributed.Process.Internal.Types (NodeId (..))
 import Control.Distributed.Process.Closure
-import Network.Transport.TCP
+import Control.Distributed.Process.Backend.SimpleLocalnet
 import ABS.Runtime.TQueue (TQueue (..), newTQueueIO, writeTQueue, readTQueue)
 import Control.Concurrent.STM (atomically, readTVar, readTVarIO, writeTVar)    
 import Control.Applicative ((<$))
@@ -84,8 +83,6 @@ import System.IO.Unsafe (unsafePerformIO)
 import Prelude (quot)
 
 import Prelude (rem)
-
-import Prelude (fmap)
 
 default (Int, Rat)
 
@@ -476,60 +473,6 @@ instance IWorker' Worker where
                awaitBool' this
                  (\ this'' ->
                     ((I'.fromIntegral (aliveDelegates'Worker this'')) == 0))
-               -- FOR TESTING LOCALLY
-               -- I'.liftIO (I'.writeIORef i 0)
-               -- I'.liftIO (I'.writeIORef j 0)
-               -- while
-               --   ((\ this'' ->
-               --       ((<=) <$!> (I'.fromIntegral <$!> I'.readIORef i) <*>
-               --          ((-) <$!>
-               --             (I'.pure div <*> I'.pure (I'.fromIntegral (size'Worker this'')) <*>
-               --                (I'.pure d))
-               --             <*> I'.pure 1)))
-               --      =<< I'.readIORef this')
-               --   (do pastDraws :: IORef' (List Int) <- I'.liftIO (I'.newIORef [])
-               --       I'.liftIO (I'.writeIORef j 0)
-               --       while
-               --         ((<=) <$!> (I'.fromIntegral <$!> I'.readIORef j) <*>
-               --            ((-) <$!> (I'.pure d) <*> I'.pure 1))
-               --         (do index :: IORef' Int <- I'.liftIO
-               --                                      (I'.newIORef =<<
-               --                                         ((+) <$!>
-               --                                            ((*) <$!>
-               --                                               (I'.fromIntegral <$!> I'.readIORef i)
-               --                                               <*> (I'.pure d))
-               --                                            <*>
-               --                                            (I'.fromIntegral <$!> I'.readIORef j)))
-               --             c :: IORef' (Fut Int) <- I'.liftIO
-               --                                        (I'.newIORef =<<
-               --                                           (\ this'' ->
-               --                                              (I'.join
-               --                                                 (((I'.pure unsafeRead <*>
-               --                                                      I'.pure (arr'Worker this''))
-               --                                                     <*>
-               --                                                     (I'.fromIntegral <$!>
-               --                                                        I'.readIORef index)))))
-               --                                             =<< I'.readIORef this')
-               --             I'.liftIO (I'.writeIORef u =<< (get =<< I'.readIORef c))
-               --             if' <- I'.liftIO
-               --                      ((I'.pure isElem <*> (I'.fromIntegral <$!> I'.readIORef u) <*>
-               --                          I'.readIORef pastDraws))
-               --             if if' then
-               --               do I'.liftIO
-               --                    (println =<<
-               --                       (I'.pure toString <*> (I'.fromIntegral <$!> I'.readIORef u)))
-               --               else
-               --               do I'.liftIO
-               --                    (I'.writeIORef pastDraws =<<
-               --                       ((:) <$!> (I'.fromIntegral <$!> I'.readIORef u) <*>
-               --                          I'.readIORef pastDraws))
-               --             I'.liftIO
-               --               (I'.writeIORef j =<<
-               --                  ((+) <$!> (I'.fromIntegral <$!> I'.readIORef j) <*> I'.pure 1)))
-               --       I'.liftIO
-               --         (I'.writeIORef i =<<
-               --            ((+) <$!> (I'.fromIntegral <$!> I'.readIORef i) <*> I'.pure 1)))
-
         init_ ws this@(Obj' this' _)
           = do I'.liftIO
                  (I'.writeIORef this' =<<
@@ -597,7 +540,7 @@ instance IWorker' Worker where
                if ((I'.fromIntegral source) > (kinit)) then
                  do I'.liftIO
                       (I'.writeIORef c =<<
-                          (\ this'' ->
+                         (\ this'' ->
                             (I'.join
                                (((I'.pure unsafeRead <*> I'.pure (arr'Worker this'')) <*>
                                    (I'.pure localIndex <*> I'.pure (I'.fromIntegral source))))))
@@ -863,17 +806,15 @@ remotable ['new_i]
 -- if the user passes a main that uses this, the program will err.
 --main_is' :: (Obj' contents -> ABS' ()) -> IO ()
 main_is' mainABS' = do
- Right transport <- createTransport (ip cmdOpt) (port cmdOpt) defaultTCPParameters
- node1 <- newLocalNode transport (__remoteTable initRemoteTable)
- case slaves cmdOpt of
-   [] -> runProcess node1 (expect) -- dummy process to wait
-   _ ->  do
+ backend <- initializeBackend (ip cmdOpt) (port cmdOpt) (__remoteTable initRemoteTable)
+ if master cmdOpt
+  then do
     mb <- newTQueueIO
     st <- I'.newIORef ([],IM.empty,0)     
-    let peers = fmap (\ ip -> NodeId $ encodeEndPointAddress ip "10501" 0) (slaves cmdOpt)
-    I'.liftIO (print $ "Slaves:" ++ I'.show peers)
-    runProcess node1 $ evalContT $ (mainABS' peers $ Obj' (I'.error "runtime error: the main ABS' block tried to call 'this'") (Cog st mb))
-
+    startMaster backend (\ peers -> do
+      I'.liftIO (print $ "Slaves:" ++ I'.show peers)
+      evalContT $ (mainABS' peers $ Obj' (I'.error "runtime error: the main ABS' block tried to call 'this'") (Cog st mb)))
+  else startSlave backend
 
 
 main
