@@ -4,7 +4,7 @@
   PartialTypeSignatures, LambdaCase, TemplateHaskell #-}
 {-# OPTIONS_GHC
   -w -Werror -fforce-recomp -fwarn-missing-methods -fno-ignore-asserts#-}
-module DisPATenDel (main) where
+module DisPATenDelO (main) where
 
 
 
@@ -229,6 +229,7 @@ instance IWorker' Worker where
                target :: IORef' Int <- I'.liftIO(I'.newIORef 0)
                u :: IORef' Int <- I'.liftIO(I'.newIORef 0)
                -- fd :: IORef' (Fut Unit) <- I'.liftIO(I'.newIORef nullFuture')
+               maybeElement :: IORef' (Maybe Int) <- I'.liftIO (I'.newIORef Nothing)
                while
                  ((<=) <$!> (I'.fromIntegral <$!> I'.readIORef i) <*> (I'.pure num))
                  (do I'.liftIO(I'.writeIORef j 1)
@@ -361,7 +362,92 @@ instance IWorker' Worker where
                                          (((>) <$!> (I'.fromIntegral <$!> I'.readIORef source) <*>
                                              (I'.pure kinit)))
                                 if if' then
-                                  do w :: IORef' RObj <- I'.liftIO
+                                  do aIndex :: IORef' Int <- I'.liftIO
+                                                               (I'.newIORef =<<
+                                                                  (I'.pure actorIndex <*>
+                                                                     (I'.fromIntegral <$!>
+                                                                        I'.readIORef source)))
+                                     if' <- I'.liftIO
+                                              ((\ this'' ->
+                                                  ((==) <$!>
+                                                     (I'.fromIntegral <$!> I'.readIORef aIndex)
+                                                     <*>
+                                                     ((-) <$!>
+                                                        I'.pure
+                                                          (I'.fromIntegral (workerId'Worker this''))
+                                                        <*> I'.pure 1)))
+                                                 =<< I'.readIORef this')
+
+                                     if if' then
+                                       do fp :: IORef' (Fut Int) <- I'.liftIO
+                                                                      (I'.newIORef =<<
+                                                                         (\ this'' ->
+                                                                            (I'.join
+                                                                               (((I'.pure unsafeRead <*>
+                                                                                    I'.pure
+                                                                                      (arr'Worker
+                                                                                         this''))
+                                                                                   <*>
+                                                                                   (I'.pure
+                                                                                      localIndex
+                                                                                      <*>
+                                                                                      (I'.fromIntegral
+                                                                                         <$!>
+                                                                                         I'.readIORef
+                                                                                           source))))))
+                                                                           =<< I'.readIORef this')
+                                          I'.liftIO
+                                            (I'.writeIORef maybeElement =<<
+                                               (pro_try =<< I'.readIORef fp))
+                                          case' <- I'.liftIO (I'.readIORef maybeElement)
+                                          case case' of
+                                              Just v -> do if' <- I'.liftIO
+                                                                    ((I'.pure isElem <*> I'.pure v
+                                                                        <*> I'.readIORef pastDraws))
+                                                           if if' then
+                                                             do I'.liftIO
+                                                                  (I'.writeIORef j =<<
+                                                                     ((-) <$!>
+                                                                        (I'.fromIntegral <$!>
+                                                                           I'.readIORef j)
+                                                                        <*> I'.pure 1))
+                                                             else
+                                                             do I'.liftIO
+                                                                  (I'.writeIORef pastDraws =<<
+                                                                     ((:) <$!> I'.pure v <*>
+                                                                        I'.readIORef pastDraws))
+                                                                I'.liftIO
+                                                                  ((\ this'' ->
+                                                                      (\ e1' ->
+                                                                         pro_give e1' =<<
+                                                                           (I'.fromIntegral <$!>
+                                                                              I'.readIORef u))
+                                                                        =<<
+                                                                        (I'.join
+                                                                           (((I'.pure unsafeRead <*>
+                                                                                I'.pure
+                                                                                  (arr'Worker
+                                                                                     this''))
+                                                                               <*>
+                                                                               (I'.pure localIndex
+                                                                                  <*>
+                                                                                  (I'.fromIntegral
+                                                                                     <$!>
+                                                                                     I'.readIORef
+                                                                                       target))))))
+                                                                     =<< I'.readIORef this')
+                                              _ -> do I'.liftIO
+                                                        (I'.writeIORef this' =<<
+                                                           ((\ this'' ->
+                                                               this''{aliveDelegates'Worker =
+                                                                        ((I'.fromIntegral
+                                                                            (aliveDelegates'Worker
+                                                                               this''))
+                                                                           + 1)})
+                                                              <$!> I'.readIORef this')) >>
+                                                        I'.liftIO ((this <!!>) =<< I'.pure delegate'''Worker <*> I'.readIORef fp <*>(I'.fromIntegral <$!> I'.readIORef target))
+                                       else
+                                       do w :: IORef' RObj <- I'.liftIO
                                                               (I'.newIORef =<<
                                                                  (\ this'' ->
                                                                     (I'.join
@@ -369,12 +455,12 @@ instance IWorker' Worker where
                                                                             I'.pure
                                                                               (ws2'Worker this''))
                                                                            <*>
-                                                                           (I'.pure actorIndex <*>
-                                                                              (I'.fromIntegral <$!>
-                                                                                 I'.readIORef
-                                                                                   source))))))
+                                                                           (I'.fromIntegral
+                                                                                   <$!>
+                                                                                   I'.readIORef
+                                                                                     aIndex)))))
                                                                    =<< I'.readIORef this')
-                                     fp :: IORef' RFut <- (I'.liftIO . I'.newIORef) =<<
+                                          fp :: IORef' RFut <- (I'.liftIO . I'.newIORef) =<<
                                                               (I'.liftIO (I'.readIORef source) >>= \ source' -> I'.liftIO (I'.readIORef w) >>= \ w' ->
                                                                     I'.lift (request_i this source' w')
                                                                   )
@@ -385,20 +471,20 @@ instance IWorker' Worker where
                                                                     --        (I'.fromIntegral <$!>
                                                                     --           I'.readIORef source))
                                                                     --   =<< I'.readIORef w))
-                                     I'.liftIO
-                                       (I'.writeIORef this' =<<
-                                          ((\ this'' ->
-                                              this''{aliveDelegates'Worker =
-                                                       ((I'.fromIntegral
-                                                           (aliveDelegates'Worker this''))
-                                                          + 1)})
-                                             <$!> I'.readIORef this'))
-                                     I'.liftIO
-                                       -- (I'.writeIORef fd =<<
-                                          ((this <!!>) =<<
-                                             I'.pure delegate''Worker <*> I'.readIORef fp <*>
-                                               (I'.fromIntegral <$!> I'.readIORef target))
-                                       -- )
+                                          I'.liftIO
+                                                (I'.writeIORef this' =<<
+                                                                       ((\ this'' ->
+                                                                             this''{aliveDelegates'Worker =
+                                                                                        ((I'.fromIntegral
+                                                                                                (aliveDelegates'Worker this''))
+                                                                                        + 1)})
+                                                                       <$!> I'.readIORef this'))
+                                          I'.liftIO
+                                                -- (I'.writeIORef fd =<<
+                                                ((this <!!>) =<<
+                                                               I'.pure delegate''Worker <*> I'.readIORef fp <*>
+                                                                     (I'.fromIntegral <$!> I'.readIORef target))
+                                                          -- )
                                   else
                                   do I'.liftIO
                                        (I'.writeIORef u =<<
@@ -653,6 +739,126 @@ delegate''Worker ft target this@(Obj' this' _)
                      this''{aliveDelegates'Worker =
                               ((I'.fromIntegral (aliveDelegates'Worker this'')) - 1)})
                     <$!> I'.readIORef this'))
+
+delegate'''Worker :: Fut Int -> Int -> Obj' Worker -> ABS' Unit
+delegate'''Worker ft target this@(Obj' this' _)
+  = do awaitFuture' this ft
+       u :: IORef' Int <- I'.liftIO (I'.newIORef =<< get ft)
+       c :: IORef' (Fut Int) <- I'.liftIO (I'.newIORef nullFuture')
+       found :: IORef' Bool <- I'.liftIO (I'.newIORef False)
+       when' <- I'.liftIO
+                  (((not) <$!>
+                      ((==) <$!> (I'.fromIntegral <$!> I'.readIORef u) <*>
+                         (I'.negate <$!> I'.pure 1))))
+       I'.when when'
+         (do i :: IORef' Int <- I'.liftIO
+                                  (I'.newIORef
+                                     (((div ((I'.fromIntegral target) - 1) (d)) * (d)) + 1))
+             lCurrentNode :: IORef' Int <- I'.liftIO
+                                             (I'.newIORef =<<
+                                                ((-) <$!>
+                                                   ((+) <$!> (I'.fromIntegral <$!> I'.readIORef i)
+                                                      <*> (I'.pure d))
+                                                   <*> I'.pure 1))
+             maybeElement :: IORef' (Maybe Int) <- I'.liftIO (I'.newIORef Nothing)
+             while
+               ((<=) <$!> (I'.fromIntegral <$!> I'.readIORef i) <*>
+                  (I'.fromIntegral <$!> I'.readIORef lCurrentNode))
+               (do I'.liftIO
+                     (I'.writeIORef maybeElement =<<
+                        (pro_try =<<
+                           (\ this'' ->
+                              (I'.join
+                                 (((I'.pure unsafeRead <*> I'.pure (arr'Worker this'')) <*>
+                                     (I'.pure localIndex <*>
+                                        (I'.fromIntegral <$!> I'.readIORef i))))))
+                             =<< I'.readIORef this'))
+                   case' <- I'.liftIO (I'.readIORef maybeElement)
+                   case case' of
+                       Just v -> do when' <- I'.liftIO
+                                               (((==) <$!> (I'.fromIntegral <$!> I'.readIORef u) <*>
+                                                   I'.pure v))
+                                    I'.when when'
+                                      (do I'.liftIO (I'.writeIORef found True)
+                                          I'.liftIO
+                                            (I'.writeIORef i =<<
+                                               ((+) <$!>
+                                                  (I'.fromIntegral <$!> I'.readIORef lCurrentNode)
+                                                  <*> I'.pure 1)))
+                       _ -> I'.pure ()
+                   I'.liftIO
+                     (I'.writeIORef i =<<
+                        ((+) <$!> (I'.fromIntegral <$!> I'.readIORef i) <*> I'.pure 1))))
+       if' <- I'.liftIO
+                (((||) <$!> I'.readIORef found <*>
+                    ((==) <$!> (I'.fromIntegral <$!> I'.readIORef u) <*>
+                       (I'.negate <$!> I'.pure 1))))
+       if if' then
+         do I'.liftIO
+              (I'.writeIORef u ((div ((I'.fromIntegral target) - 1) (d)) * (d)))
+            u2 :: IORef' Int <- I'.liftIO
+                                  (I'.newIORef =<<
+                                     (\ this'' ->
+                                        (I'.join
+                                           (((I'.pure uniformR <*>
+                                                ((,) <$!> ((+) <$!> (I'.pure kinit) <*> I'.pure 1)
+                                                   <*> (I'.fromIntegral <$!> I'.readIORef u)))
+                                               <*> I'.pure (g'Worker this'')))))
+                                       =<< I'.readIORef this')
+            w :: IORef' RObj <- I'.liftIO
+                                     (I'.newIORef =<<
+                                        (\ this'' ->
+                                           (I'.join
+                                              (((I'.pure unsafeIndexM <*> I'.pure (ws2'Worker this'')) <*>
+                                                  (I'.pure actorIndex <*>
+                                                     (I'.fromIntegral <$!> I'.readIORef u2))))))
+                                          =<< I'.readIORef this')
+            fp :: IORef' RFut <- (I'.liftIO . I'.newIORef) =<<
+                                                              (I'.liftIO (I'.readIORef u2) >>= \ u2' -> I'.liftIO (I'.readIORef w) >>= \ w' ->
+                                                                    I'.lift (request_i this u2' w')
+                                                                  )
+            _ <- (this <..>) =<<
+                   I'.liftIO
+                     (I'.pure delegate''Worker <*> I'.readIORef fp <*>
+                        I'.pure (I'.fromIntegral target))
+            I'.pure ()
+
+            -- w :: IORef' IWorker <- I'.liftIO
+            --                          (I'.newIORef =<<
+            --                             (\ this'' ->
+            --                                (I'.join
+            --                                   (((I'.pure indexM <*> I'.pure (ws2'Worker this'')) <*>
+            --                                       (I'.pure actorIndex <*>
+            --                                          (I'.fromIntegral <$!> I'.readIORef u2))))))
+            --                               =<< I'.readIORef this')
+            -- fp :: IORef' (Fut Int) <- I'.liftIO
+            --                             (I'.newIORef =<<
+            --                                ((\ (IWorker obj') ->
+            --                                    (obj' <!>) =<<
+            --                                      I'.pure request <*>
+            --                                        (I'.fromIntegral <$!> I'.readIORef u2))
+            --                                   =<< I'.readIORef w))
+            -- _ <- (this <..>) =<<
+            --        I'.liftIO
+            --          (I'.pure delegate''Worker <*> I'.readIORef fp <*>
+            --             I'.pure (I'.fromIntegral target))
+            -- I'.pure ()
+         else
+         do I'.liftIO
+              ((\ this'' ->
+                  (\ e1' -> pro_give e1' =<< (I'.fromIntegral <$!> I'.readIORef u))
+                    =<<
+                    (I'.join
+                       (((I'.pure unsafeRead <*> I'.pure (arr'Worker this'')) <*>
+                           (I'.pure localIndex <*> I'.pure (I'.fromIntegral target))))))
+                 =<< I'.readIORef this')
+            I'.liftIO
+              (I'.writeIORef this' =<<
+                 ((\ this'' ->
+                     this''{aliveDelegates'Worker =
+                              ((I'.fromIntegral (aliveDelegates'Worker this'')) - 1)})
+                    <$!> I'.readIORef this'))
+
 
 
 --{-# INLINABLE (<!>) #-}
