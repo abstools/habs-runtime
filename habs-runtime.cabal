@@ -88,31 +88,3 @@ test-suite unit
     silently
   ghc-options: -fno-ignore-asserts -threaded "-with-rtsopts=-N4"
   hs-source-dirs: tests
-
-
--- BENCHMARKS
--------------
-
-benchmark cog
-  type: exitcode-stdio-1.0
-  main-is: cog.hs
-  build-depends:
-    base,
-    habs-runtime,
-    transformers,
-    unagi-chan,
-    stm,
-    criterion
-  hs-source-dirs: bench
-  ghc-options: -O -fno-ignore-asserts -threaded "-with-rtsopts=-N4"
-
-benchmark future
-  type: exitcode-stdio-1.0
-  main-is: future.hs
-  build-depends:
-    base,
-    habs-runtime,
-    stm,
-    criterion
-  hs-source-dirs: bench
-  ghc-options: -O -fno-ignore-asserts -threaded "-with-rtsopts=-N4"
