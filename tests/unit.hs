@@ -10,7 +10,7 @@ import System.Environment (getArgs, withArgs)
 
 import System.IO
 import Control.Monad (replicateM_, replicateM)
-import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans.Class (lift)
 import Control.Concurrent (threadDelay)
 import Data.IORef (readIORef, modifyIORef')
 
@@ -33,24 +33,24 @@ c' = C { x = 0}
 
 -- we have to use stderr stream because tasty uses stdout and interferes
 println' :: String -> ABS' ()
-println' = liftIO . hPutStrLn stderr
+println' = lift . hPutStrLn stderr
 
 case_fifo :: IO ()
 case_fifo = do
   let method1 this = do
-          liftIO $ threadDelay 10     
+          lift $ threadDelay 10     
           suspend this
           println' "m1"
 
   let method2 this = do
-          liftIO $ threadDelay 10
+          lift $ threadDelay 10
           suspend this
           println' "m2"
 
   let main = withArgs [] $ main_is' (\ this -> do
-                o1 <- liftIO $ newlocal' this (const $ return ()) c'
-                o2 <- liftIO $ newlocal' this (const $ return ()) c'
-                fs <- replicateM 100 (liftIO $ do
+                o1 <- lift $ newlocal' this (const $ return ()) c'
+                o2 <- lift $ newlocal' this (const $ return ()) c'
+                fs <- replicateM 100 (lift $ do
                                        f1 <- o1 <!> method1
                                        f2 <- o2 <!> method2
                                        return [f1,f2]
@@ -68,26 +68,26 @@ case_fifo = do
 case_future_forwarding :: IO ()
 case_future_forwarding = do
   let method1 this = do
-          liftIO $ threadDelay 10
+          lift $ threadDelay 10
           suspend this
           return 3
 
   let method2 f this = do
           awaitFuture' this f
-          res <- liftIO $ get f
+          res <- lift $ get f
           let res' = res + 1
           println' (show res')
           return res'
 
   let main = withArgs [] $ main_is' (\ this -> do
-                o1 <- liftIO $ new (const $ return ()) c'
-                o2 <- liftIO $ new (const $ return ()) c'
+                o1 <- lift $ new (const $ return ()) c'
+                o2 <- lift $ new (const $ return ()) c'
                 replicateM_ 100 (do
-                                       f1 <- liftIO $ o1 <!> method1
-                                       f2 <- liftIO $ o2 <!> method2 f1
+                                       f1 <- lift $ o1 <!> method1
+                                       f2 <- lift $ o2 <!> method2 f1
                                        awaitFuture' this f2
-                                       res <- liftIO $ get f1
-                                       liftIO $ threadDelay 10
+                                       res <- lift $ get f1
+                                       lift $ threadDelay 10
                                        println' (show res)
                                      )
                       )
@@ -99,52 +99,52 @@ case_future_forwarding = do
 case_await_boolean :: IO ()
 case_await_boolean = do
   let inc this@(Obj' contents _) = do
-          liftIO $ threadDelay 10
+          lift $ threadDelay 10
           awaitBool' this (\ C { x = x } -> x == 0)             
-          liftIO $ modifyIORef' contents (\ C { x = x } -> C { x = x + 1})             
+          lift $ modifyIORef' contents (\ C { x = x } -> C { x = x + 1})             
           println' "inc"
           suspend this
           return ()
 
   let dec this@(Obj' contents _) = do
-          liftIO $ threadDelay 10
+          lift $ threadDelay 10
           awaitBool' this (\ C { x = x } -> x == 1)             
-          liftIO $ modifyIORef' contents (\ C { x = x } -> C { x = x - 1})             
+          lift $ modifyIORef' contents (\ C { x = x } -> C { x = x - 1})             
           println' "dec"
           suspend this
           return ()
 
   let check this@(Obj' contents _) = do
-          C { x = x } <- liftIO $ readIORef contents             
+          C { x = x } <- lift $ readIORef contents             
           return x
 
   let main = withArgs [] $ main_is' (\ this -> do
-                o1 <- liftIO $ new (const $ return ()) c'
-                fs <- replicateM 100 (liftIO $ do
+                o1 <- lift $ new (const $ return ()) c'
+                fs <- replicateM 100 (lift $ do
                                  f1 <- o1 <!> dec
                                  f2 <- o1 <!> inc
                                  return [f1,f2]
                                     )
                 mapM_ (\ f -> awaitFuture' this f) (concat fs)
-                liftIO $ threadDelay 1000
-                f <- liftIO $ o1 <!> check
-                res <- liftIO $ get f
-                liftIO $ assertEqual "wrong last value" 0 res
+                lift $ threadDelay 1000
+                f <- lift $ o1 <!> check
+                res <- lift $ get f
+                lift $ assertEqual "wrong last value" 0 res
                       )
 
   let main_local = withArgs [] $ main_is' (\ this -> do
-                o1 <- liftIO $ newlocal' this (const $ return ()) c'
-                fs <- replicateM 100 (liftIO $ do
+                o1 <- lift $ newlocal' this (const $ return ()) c'
+                fs <- replicateM 100 (lift $ do
                                  f1 <- o1 <!> dec
                                  f2 <- o1 <!> inc
                                  return [f1,f2]
                                     )
                 mapM_ (\ f -> awaitFuture' this f) (concat fs)
-                liftIO $ threadDelay 1000
-                f <- liftIO $ o1 <!> check
+                lift $ threadDelay 1000
+                f <- lift $ o1 <!> check
                 awaitFuture' this f
-                res <- liftIO $ get f
-                liftIO $ assertEqual "wrong last value" 0 res
+                res <- lift $ get f
+                lift $ assertEqual "wrong last value" 0 res
                             )
 
   (outStr, ()) <- hCapture [stderr] main

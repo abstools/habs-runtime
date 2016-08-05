@@ -7,7 +7,7 @@ import Criterion.Types
 
 import Data.IORef
 import Control.Monad (replicateM)
-import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Cont (evalContT, callCC)
 import Control.Concurrent
 import qualified Control.Concurrent.Chan.Unagi as U
@@ -29,10 +29,10 @@ import System.Environment (withArgs)
 
 method7 :: Int -> IORef Int -> Obj' this -> ABS' ()
 method7 j attr this = do
-    v <- liftIO $ readIORef attr
-    liftIO $ writeIORef attr $! v + 1
-    v <- liftIO $ readIORef attr
-    liftIO $ writeIORef attr $! v + 1
+    v <- lift $ readIORef attr
+    lift $ writeIORef attr $! v + 1
+    v <- lift $ readIORef attr
+    lift $ writeIORef attr $! v + 1
     if (v > j)
      then return ()
      else do
@@ -42,7 +42,7 @@ method7 j attr this = do
 data C = C
 
 main7 n m j = withArgs [] $ main_is' (\ this -> do
-                          fs <-replicateM n (liftIO $ do
+                          fs <-replicateM n (lift $ do
                                                  obj <- new (const $ return ()) C
                                                  replicateM m (do
                                                                 attr <- newIORef 0
@@ -54,14 +54,14 @@ main7 n m j = withArgs [] $ main_is' (\ this -> do
 
 method1 :: Int -> IORef Int -> MVar () -> ABS' ()
 method1 j attr t = do
-    v <- liftIO $ readIORef attr
-    liftIO $ writeIORef attr $! v + 1
-    v <- liftIO $ readIORef attr
-    liftIO $ writeIORef attr $! v + 1
+    v <- lift $ readIORef attr
+    lift $ writeIORef attr $! v + 1
+    v <- lift $ readIORef attr
+    lift $ writeIORef attr $! v + 1
     if (v > j)
      then return ()
      else do
-       liftIO (putMVar t () >> takeMVar t) -- = suspend
+       lift (putMVar t () >> takeMVar t) -- = suspend
        method1 j attr t
     
 main1 n m j =  do
@@ -74,8 +74,8 @@ main1 n m j =  do
                                            takeMVar cog_token
                                            evalContT $ do
                                                     res <- method1 j attr cog_token
-                                                    liftIO $ putMVar destiny res
-                                                    liftIO $ putMVar cog_token ()
+                                                    lift $ putMVar destiny res
+                                                    lift $ putMVar cog_token ()
                                      return destiny
                                    )
                     )
@@ -113,16 +113,16 @@ main2 n m j =  do
 
 method3 :: Int -> IORef Int -> Chan (() -> ABS' ()) -> ABS' ()
 method3 j attr t = do
-    v <- liftIO $ readIORef attr
-    liftIO $ writeIORef attr $! v + 1
-    v <- liftIO $ readIORef attr
-    liftIO $ writeIORef attr $! v + 1
+    v <- lift $ readIORef attr
+    lift $ writeIORef attr $! v + 1
+    v <- lift $ readIORef attr
+    lift $ writeIORef attr $! v + 1
     if (v > j)
      then return () -- v should be 101
      else do
        callCC (\ k -> do
-                   liftIO $ writeChan t k
-                   k' <- liftIO $ readChan t
+                   lift $ writeChan t k
+                   k' <- lift $ readChan t
                    k' ()
               )
        method3 j attr t
@@ -138,8 +138,8 @@ main3 n m j =  do
                                      destiny <- newEmptyMVar
                                      writeChan cog_chan (\ () -> do
                                                           res <- method3 j attr cog_chan
-                                                          liftIO $ putMVar destiny res
-                                                          k' <- liftIO $ readChan cog_chan
+                                                          lift $ putMVar destiny res
+                                                          k' <- lift $ readChan cog_chan
                                                           k' ()
                                                         )
                                      return destiny
@@ -150,16 +150,16 @@ main3 n m j =  do
 
 method4 :: Int -> IORef Int -> (U.InChan (() -> ABS' ()), U.OutChan (() -> ABS' ())) -> ABS' ()
 method4 j attr c@(i,o) = do
-    v <- liftIO $ readIORef attr
-    liftIO $ writeIORef attr $! v + 1
-    v <- liftIO $ readIORef attr
-    liftIO $ writeIORef attr $! v + 1
+    v <- lift $ readIORef attr
+    lift $ writeIORef attr $! v + 1
+    v <- lift $ readIORef attr
+    lift $ writeIORef attr $! v + 1
     if (v > j)
      then return () -- v should be 101
      else do
        callCC (\ k -> do
-                   liftIO $ U.writeChan i k
-                   k' <- liftIO $ U.readChan o
+                   lift $ U.writeChan i k
+                   k' <- lift $ U.readChan o
                    k' ()
               )
        method4 j attr c
@@ -175,8 +175,8 @@ main4 n m j =  do
                                      destiny <- newEmptyMVar
                                      U.writeChan i (\ () -> do
                                                           res <- method4 j attr c
-                                                          liftIO $ putMVar destiny res
-                                                          k' <- liftIO $ U.readChan o
+                                                          lift $ putMVar destiny res
+                                                          k' <- lift $ U.readChan o
                                                           k' ()
                                                         )
                                      return destiny
@@ -187,16 +187,16 @@ main4 n m j =  do
 
 method5 :: Int -> IORef Int -> TQueue (() -> ABS' ()) -> ABS' ()
 method5 j attr t = do
-    v <- liftIO $ readIORef attr
-    liftIO $ writeIORef attr $! v + 1
-    v <- liftIO $ readIORef attr
-    liftIO $ writeIORef attr $! v + 1
+    v <- lift $ readIORef attr
+    lift $ writeIORef attr $! v + 1
+    v <- lift $ readIORef attr
+    lift $ writeIORef attr $! v + 1
     if (v > j)
      then return () -- v should be 101
      else do
        callCC (\ k -> do
-                   liftIO $ atomically $ writeTQueue t k
-                   k' <- liftIO $ atomically $ readTQueue t
+                   lift $ atomically $ writeTQueue t k
+                   k' <- lift $ atomically $ readTQueue t
                    k' ()
               )
        method5 j attr t
@@ -212,8 +212,8 @@ main5 n m j =  do
                                      destiny <- newEmptyMVar
                                      atomically $ writeTQueue cog_chan (\ () -> do
                                                           res <- method5 j attr cog_chan
-                                                          liftIO $ putMVar destiny res
-                                                          k' <- liftIO $ atomically $ readTQueue cog_chan
+                                                          lift $ putMVar destiny res
+                                                          k' <- lift $ atomically $ readTQueue cog_chan
                                                           k' ()
                                                         )
                                      return destiny
