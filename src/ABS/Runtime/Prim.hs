@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, ScopedTypeVariables, LambdaCase #-}
+{-# LANGUAGE ScopedTypeVariables, LambdaCase #-}
 module ABS.Runtime.Prim
     ( null, nullFuture'
     , suspend, awaitFuture', awaitBool', get
@@ -18,11 +18,14 @@ import ABS.Runtime.Base
 import ABS.Runtime.CmdOpt
 import ABS.Runtime.TQueue (TQueue (..), newTQueueIO, writeTQueue, readTQueue)
 import ABS.Runtime.Extension.Exception hiding (throw, catch)
-import Control.Concurrent (ThreadId, myThreadId, newEmptyMVar, isEmptyMVar, putMVar, readMVar, forkIO, threadDelay, runInUnboundThread)
+import Control.Concurrent (ThreadId, myThreadId, newEmptyMVar, isEmptyMVar, putMVar, readMVar, forkIO, threadDelay)
 import Control.Concurrent.STM (atomically, readTVar, readTVarIO, writeTVar)    
+import Control.Distributed.Process (Process, spawnLocal)
+import Control.Distributed.Process.Node (newLocalNode, initRemoteTable, runProcess)
+import Network.Transport.TCP (createTransport, defaultTCPParameters)
 
 import Control.Monad.Trans.Cont (evalContT, callCC)
-import Control.Monad.Trans.Class (lift)
+import Control.Monad.IO.Class (liftIO)
 import Data.IORef (newIORef, readIORef, writeIORef, modifyIORef')
 import System.IO.Unsafe (unsafePerformIO)
 
@@ -38,21 +41,6 @@ import Data.Typeable
 import Data.List (delete)
 import System.Random (randomRIO)
 
-#ifdef WAIT_ALL_COGS
-import Control.Exception (try,mask)
-import Control.Concurrent.STM (retry)
-import Control.Concurrent.STM.TVar (TVar, newTVarIO, modifyTVar')
-import Foreign.StablePtr
-{-# NOINLINE __tg #-}
-__tg :: TVar Int
-__tg = unsafePerformIO $ newTVarIO 0
-
-forkIO__tg :: IO a -> IO ThreadId
-forkIO__tg action = mask $ \restore -> do
-    atomically $ modifyTVar' __tg (+ 1)
-    forkIO $ 
-      try (restore action) >>= \ (_ :: Either SomeException a) -> atomically (modifyTVar' __tg (subtract 1))
-#endif
 
 -- this is fine but whenever it is used
 -- we do (unsafeCoerce null :: MVar a) == d
@@ -73,22 +61,22 @@ nullFuture' = unsafePerformIO $ newEmptyMVar
 -- implemented by inlining back' function and using a custom TQueue that exposes the otherwise abstract datatype TQueue.
 suspend :: Obj' this -> ABS' ()
 suspend (Obj' _ (Cog thisSleepTable thisMailBox@(TQueue tread twrite))) = do
-  (mwoken, st') <- lift $ findWoken =<< readIORef thisSleepTable                                                 
+  (mwoken, st') <- liftIO $ findWoken =<< readIORef thisSleepTable                                                 
   case mwoken of
     Nothing -> do
-      xs <- lift $ readTVarIO tread
+      xs <- liftIO $ readTVarIO tread
       case xs of
         (k':ks') -> callCC (\ k -> do
-                          lift $ do
+                          liftIO $ do
                                  atomically $ writeTQueue thisMailBox (k ())
                                  atomically $ writeTVar tread ks'
                           k')
         [] -> do 
-          ys <- lift $ readTVarIO twrite
+          ys <- liftIO $ readTVarIO twrite
           case ys of
             [] -> return ()       -- continue
             _  -> callCC (\ k -> join $
-                            lift $ atomically $ do
+                            liftIO $ atomically $ do
                                  ws <- readTVar twrite
                                  case reverse (k():ws) of
                                    [] -> error "readTQueue"
@@ -97,7 +85,7 @@ suspend (Obj' _ (Cog thisSleepTable thisMailBox@(TQueue tread twrite))) = do
                                                 return z
                          )
     Just woken -> callCC (\ k -> do
-                           lift $ do
+                           liftIO $ do
                              atomically $ writeTQueue thisMailBox (k ())                
                              writeIORef thisSleepTable st' -- the sleep-table was modified, so write it back
                            woken)
@@ -105,25 +93,25 @@ suspend (Obj' _ (Cog thisSleepTable thisMailBox@(TQueue tread twrite))) = do
 {-# INLINE back' #-}
 back' :: Cog -> ABS' ()
 back' (Cog thisSleepTable thisMailBox) = do
-  (mwoken, st') <- lift $ findWoken =<< readIORef thisSleepTable                                                 
+  (mwoken, st') <- liftIO $ findWoken =<< readIORef thisSleepTable                                                 
   case mwoken of
-    Nothing -> join $ lift $ atomically $ readTQueue thisMailBox
+    Nothing -> join $ liftIO $ atomically $ readTQueue thisMailBox
     Just woken -> do
-                lift $ writeIORef thisSleepTable st' -- the sleep-table was modified, so write it back
+                liftIO $ writeIORef thisSleepTable st' -- the sleep-table was modified, so write it back
                 woken
 handlers' :: [Handler ABS' a]
-handlers' = [ Handler $ \ (ex :: AssertionFailed) -> lift $ hPrint stderr ex >> System.Exit.exitFailure
+handlers' = [ Handler $ \ (ex :: AssertionFailed) -> liftIO $ hPrint stderr ex >> System.Exit.exitFailure
             , Handler $ \ (ex :: PatternMatchFail) -> do
-                                          when (trace_exceptions cmdOpt) (lift $ hPutStrLn stderr $ "Process died upon Uncaught-Exception: " ++ show ex)
+                                          when (trace_exceptions cmdOpt) (liftIO $ hPutStrLn stderr $ "Process died upon Uncaught-Exception: " ++ show ex)
                                           return $ throw ex  -- rethrows it inside the future-"box"
             , Handler $ \ (ex :: RecSelError) -> do
-                                          when (trace_exceptions cmdOpt) (lift $ hPutStrLn stderr $ "Process died upon Uncaught-Exception: " ++ show ex)
+                                          when (trace_exceptions cmdOpt) (liftIO $ hPutStrLn stderr $ "Process died upon Uncaught-Exception: " ++ show ex)
                                           return $ throw ex  -- rethrows it inside the future-"box"
             , Handler $ \ DivideByZero -> do
-                                          when (trace_exceptions cmdOpt) (lift $ hPutStrLn stderr $ "Process died upon Uncaught-Exception: " ++ show DivideByZero)
+                                          when (trace_exceptions cmdOpt) (liftIO $ hPutStrLn stderr $ "Process died upon Uncaught-Exception: " ++ show DivideByZero)
                                           return $ throw DivideByZero  -- rethrows it inside the future-"box"
             , Handler $ \ (ex :: ABSException') -> do
-                                          when (trace_exceptions cmdOpt) (lift $ hPutStrLn stderr $ "Process died upon Uncaught-Exception: " ++ show ex)
+                                          when (trace_exceptions cmdOpt) (liftIO $ hPutStrLn stderr $ "Process died upon Uncaught-Exception: " ++ show ex)
                                           return $ throw ex  -- rethrows it inside the future-"box"                                       
             ]
 
@@ -137,10 +125,10 @@ handlers' = [ Handler $ \ (ex :: AssertionFailed) -> lift $ hPrint stderr ex >> 
 {-# INLINABLE awaitFuture' #-}
 awaitFuture' :: Obj' this -> Fut a -> ABS' ()
 awaitFuture' (Obj' _ thisCog@(Cog _ thisMailBox)) fut = do
-  empty <- lift $ isEmptyMVar fut -- according to ABS' semantics it should continue right away, hence this test.
+  empty <- liftIO $ isEmptyMVar fut -- according to ABS' semantics it should continue right away, hence this test.
   when empty $
     callCC (\ k -> do
-                  _ <- lift $ forkIO (do
+                  _ <- liftIO $ forkIO (do
                                     _ <- readMVar fut    -- wait for future to be resolved
                                     atomically $ writeTQueue thisMailBox (k ()))
                   back' thisCog)
@@ -148,10 +136,10 @@ awaitFuture' (Obj' _ thisCog@(Cog _ thisMailBox)) fut = do
 {-# INLINABLE awaitFutures' #-}
 awaitFutures' :: Obj' this -> [IO Bool] -> IO a -> ABS' ()
 awaitFutures' (Obj' _ thisCog@(Cog _ thisMailBox)) pollingTest blockingAction = do
-  someEmpty <- lift $ orM pollingTest -- according to ABS' semantics it should continue right away, hence this test.
+  someEmpty <- liftIO $ orM pollingTest -- according to ABS' semantics it should continue right away, hence this test.
   when someEmpty $
     callCC (\ k -> do
-                  _ <- lift $ forkIO (do
+                  _ <- liftIO $ forkIO (do
                                     _ <- blockingAction    -- wait for future to be resolved
                                     atomically $ writeTQueue thisMailBox (k ()))
                   back' thisCog)
@@ -180,17 +168,17 @@ awaitFutureField' :: Typeable a
                   -> Fut a 
                   -> ABS' ()
 awaitFutureField' (Obj' this' thisCog@(Cog _ thisMailBox)) setter mvar = do
-  empty <- lift $ isEmptyMVar mvar -- according to ABS' semantics it should continue right away, hence this test.
+  empty <- liftIO $ isEmptyMVar mvar -- according to ABS' semantics it should continue right away, hence this test.
   when empty $
     callCC (\ k -> do
-                  lift $ forkIO (go mvar k) >>= \ tid -> modifyIORef' this' (setter (tid:))
+                  liftIO $ forkIO (go mvar k) >>= \ tid -> modifyIORef' this' (setter (tid:))
                   back' thisCog)
   where
     go mvar' k = (do
                     _ <- readMVar mvar'    -- wait for future to be resolved
                     tid <- myThreadId
                     atomically $ writeTQueue thisMailBox (do
-                        lift $ modifyIORef' this' (setter (delete tid))
+                        liftIO $ modifyIORef' this' (setter (delete tid))
                         k ())
                  ) `catch` (\ (ChangedFuture' mvar'') -> go mvar'' k)
 
@@ -201,14 +189,14 @@ instance (Typeable a) => Exception (ChangedFuture' a)
 {-# INLINABLE awaitBool' #-}
 awaitBool' :: Obj' thisContents -> (thisContents -> Bool) -> ABS' ()
 awaitBool' (Obj' thisContentsRef (Cog thisSleepTable thisMailBox)) testFun = do
-  thisContents <- lift $ readIORef thisContentsRef
+  thisContents <- liftIO $ readIORef thisContentsRef
   unless (testFun thisContents) $
     callCC (\ k -> do
-                       (mwoken, st') <- lift $ findWoken =<< readIORef thisSleepTable
-                       lift $ writeIORef thisSleepTable $ 
+                       (mwoken, st') <- liftIO $ findWoken =<< readIORef thisSleepTable
+                       liftIO $ writeIORef thisSleepTable $ 
                                   (testFun <$> readIORef thisContentsRef, k ()) : st' -- append failed await, maybe force like modifyIORef?
                        case mwoken of
-                         Nothing -> join $ lift $ atomically $ readTQueue thisMailBox
+                         Nothing -> join $ liftIO $ atomically $ readTQueue thisMailBox
                          Just woken -> woken
                        )
 
@@ -217,7 +205,7 @@ awaitBool' (Obj' thisContentsRef (Cog thisSleepTable thisMailBox)) testFun = do
 awaitDuration' :: Obj' this -> Ratio Int -> Ratio Int -> ABS' ()
 awaitDuration' (Obj' _ thisCog@(Cog _ thisMailBox)) tmin _tmax = 
   callCC (\ k -> do
-                  _ <- lift $ forkIO (do
+                  _ <- liftIO $ forkIO (do
                                     threadDelay $ truncate $ tmin * 1000000 -- seconds to microseconds
                                     atomically $ writeTQueue thisMailBox (k ()))
                   back' thisCog)
@@ -243,7 +231,7 @@ sync' (Obj' _ (Cog _ thisCogToken)) callee@(Obj' _ (Cog _ calleeCogToken)) metho
   fut <- newEmptyMVar 
   atomically $ writeTQueue otherMailBox (do
                               res <- methodPartiallyApplied obj `catches` handlers'
-                              lift $ putMVar fut res      -- method resolves future
+                              liftIO $ putMVar fut res      -- method resolves future
                               back' otherCog)
   return fut                                                            
 
@@ -266,10 +254,10 @@ awaitSugar' :: Obj' this
             -> ABS' ()
 awaitSugar' (Obj' _ thisCog@(Cog _ thisMailBox)) lhs obj@(Obj' _ otherCog@(Cog _ otherMailBox)) methodPartiallyApplied = 
   callCC (\ k -> do
-    lift $ atomically $ writeTQueue otherMailBox (do
+    liftIO $ atomically $ writeTQueue otherMailBox (do
                res <- methodPartiallyApplied obj `catches` handlers'
-               lift $ atomically $ writeTQueue thisMailBox (do
-                                                              lift $ lhs $! res -- whnf to force the exception at the caller side TODO: to be tested , try also evaluate
+               liftIO $ atomically $ writeTQueue thisMailBox (do
+                                                              liftIO $ lhs $! res -- whnf to force the exception at the caller side TODO: to be tested , try also evaluate
                                                               k () )
                back' otherCog)
     back' thisCog)
@@ -279,34 +267,30 @@ awaitSugar' (Obj' _ thisCog@(Cog _ thisMailBox)) lhs obj@(Obj' _ otherCog@(Cog _
 
 {-# INLINABLE new #-}
 -- | new, unlifted
-new :: (Obj' a -> IO ()) -> a -> IO (Obj' a)
+new :: (Obj' a -> Process ()) -> a -> Process (Obj' a)
 new initFun objSmartCon = do
                 -- create the cog
-                newCogSleepTable <- newIORef []
-                newCogMailBox <- newTQueueIO
+                newCogSleepTable <- liftIO $ newIORef []
+                newCogMailBox <- liftIO $ newTQueueIO
                 let newCog = Cog newCogSleepTable newCogMailBox
 
                 -- create the object
-                newObj'Contents <- newIORef objSmartCon
+                newObj'Contents <- liftIO $ newIORef objSmartCon
                 let newObj' = Obj' newObj'Contents newCog
 
                 -- create the init process on the new Cog
-#ifdef WAIT_ALL_COGS
-                _ <- forkIO__tg $ do
-#else
-                _ <- forkIO $ do
-#endif
+                _ <- spawnLocal $ do
                             initFun newObj'
-                            atomically (readTQueue newCogMailBox) >>= evalContT -- init method exits, does not have to findWoken because there can be no other processes yet
+                            liftIO (atomically $ readTQueue newCogMailBox) >>= evalContT -- init method exits, does not have to findWoken because there can be no other processes yet
                 return newObj'
 
 
 {-# INLINABLE newlocal' #-}
 -- | new local, unlifted
-newlocal' :: Obj' this -> (Obj' a -> IO ()) -> a -> IO (Obj' a)
+newlocal' :: Obj' this -> (Obj' a -> Process ()) -> a -> Process (Obj' a)
 newlocal' (Obj' _ thisCog) initFun objSmartCon = do
                 -- create the object
-                newObj'Contents <- newIORef objSmartCon
+                newObj'Contents <- liftIO $ newIORef objSmartCon
                 let newObj' = Obj' newObj'Contents thisCog
                 
                 -- Safe optimization: we call init directly from here, safe because init cannot yield (has type IO)
@@ -343,7 +327,7 @@ while' :: IO Bool -> IO () -> IO ()
 while' predAction loopAction = (`when` (loopAction >> while' predAction loopAction)) =<< predAction -- else continue
 
 while :: IO Bool -> ABS' () -> ABS' ()
-while predAction loopAction = (`when` (loopAction >> while predAction loopAction)) =<< lift predAction -- else continue
+while predAction loopAction = (`when` (loopAction >> while predAction loopAction)) =<< liftIO predAction -- else continue
  
 
 {-# INLINE now #-}
@@ -373,19 +357,11 @@ random i = randomRIO (0, case compare i 0 of
 main_is' :: (Obj' contents -> ABS' ()) -> IO ()
 main_is' mainABS' = do
  hSetBuffering stderr LineBuffering
- runInUnboundThread $ do
-#ifdef WAIT_ALL_COGS
-  _ <- forkIO__tg $ do
-#endif
-      _ <- evaluate cmdOpt           -- force the cmdopt parsing, otherwise will not run even --help
-      mb <- newTQueueIO
-      st <- newIORef []
-      evalContT $ do
-        (mainABS' $ Obj' (error "runtime error: the main ABS' block tried to call 'this'") (Cog st mb)) `catches` handlers'
-#ifdef WAIT_ALL_COGS
-        back' (Cog st mb)
-  t <- myThreadId
-  s <- newStablePtr t
-  atomically $ readTVar __tg >>= \n -> when (n >= 1) retry
-  --freeStablePtr s
-#endif
+ Right t <- createTransport (ip cmdOpt) (port cmdOpt) defaultTCPParameters
+ node <- newLocalNode t initRemoteTable
+ mb <- newTQueueIO
+ st <- newIORef []
+ runProcess node $ 
+  case creator cmdOpt of
+    [] -> evalContT $ (mainABS' $ Obj' (error "runtime error: the main ABS' block tried to call 'this'") (Cog st mb)) `catches` handlers'
+    _ -> undefined

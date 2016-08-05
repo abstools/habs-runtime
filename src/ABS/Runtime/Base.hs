@@ -7,6 +7,7 @@ import ABS.Runtime.TQueue (TQueue) -- mailbox
 import Data.IORef (IORef)
 import Control.Monad.Trans.Cont (ContT)
 import Data.Time.Clock (NominalDiffTime) -- for realtime
+import Control.Distributed.Process (Process)
 
 -- | a future reference is a write-once locking var
 --
@@ -44,7 +45,7 @@ type SleepTable = [ (IO Bool     -- test function
                     ,ABS' ())  -- continuation
                   ]
 
-type ABS' = ContT () IO
+type ABS' = ContT () Process
 
 
 -- | Subtyping-relation for ABS objects (as a multiparam typeclass)

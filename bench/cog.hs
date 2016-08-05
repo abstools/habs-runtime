@@ -7,8 +7,9 @@ import Criterion.Types
 
 import Data.IORef
 import Control.Monad (replicateM)
+import Control.Monad.Trans.Class (lift)
 import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Trans.Cont (evalContT, callCC)
+import Control.Monad.Trans.Cont (ContT, evalContT, callCC)
 import Control.Concurrent
 import qualified Control.Concurrent.Chan.Unagi as U
 import Control.Concurrent.STM (atomically)
@@ -16,7 +17,7 @@ import Control.Concurrent.STM.TQueue
 import System.Environment (withArgs)
 
 {- Setup
- n COGs, m procs, j loops of procs
+n COGs, m procs, j loops of procs
 
 1 COG, 1 proc each, 100 loops each
 1 COG, 100 procs each, 100 loops each
@@ -25,6 +26,7 @@ import System.Environment (withArgs)
 100 COGs, 1 proc each, 100 loops each
 100 COGs, 100 procs each, 100 loops each
 
+NB: in the ABS cloud runtime, method7 is lifted to Process monad although it could in principal simply operate in IO; all other methods stay in IO monad
 -}
 
 method7 :: Int -> IORef Int -> Obj' this -> ABS' ()
@@ -39,12 +41,11 @@ method7 j attr this = do
        suspend this
        this <..> method7 j attr
     
-data C = C
 
 main7 n m j = withArgs [] $ main_is' (\ this -> do
-                          fs <-replicateM n (liftIO $ do
-                                                 obj <- new (const $ return ()) C
-                                                 replicateM m (do
+                          fs <-replicateM n (do
+                                                 obj <- lift $ new (const $ return ()) C
+                                                 liftIO $ replicateM m (do
                                                                 attr <- newIORef 0
                                                                 obj <!> method7 j attr)
                                                )
@@ -52,7 +53,10 @@ main7 n m j = withArgs [] $ main_is' (\ this -> do
                        )
 
 
-method1 :: Int -> IORef Int -> MVar () -> ABS' ()
+data C = C
+
+
+method1 :: Int -> IORef Int -> MVar () -> ContT () IO ()
 method1 j attr t = do
     v <- liftIO $ readIORef attr
     liftIO $ writeIORef attr $! v + 1
@@ -111,7 +115,7 @@ main2 n m j =  do
   mapM_ (\ f -> takeMVar f) (concat fs)
 
 
-method3 :: Int -> IORef Int -> Chan (() -> ABS' ()) -> ABS' ()
+method3 :: Int -> IORef Int -> Chan (() -> ContT () IO ()) -> ContT () IO ()
 method3 j attr t = do
     v <- liftIO $ readIORef attr
     liftIO $ writeIORef attr $! v + 1
@@ -148,7 +152,7 @@ main3 n m j =  do
   mapM_ (\ f -> takeMVar f) (concat fs)
 
 
-method4 :: Int -> IORef Int -> (U.InChan (() -> ABS' ()), U.OutChan (() -> ABS' ())) -> ABS' ()
+method4 :: Int -> IORef Int -> (U.InChan (() -> ContT () IO ()), U.OutChan (() -> ContT () IO ())) -> ContT () IO ()
 method4 j attr c@(i,o) = do
     v <- liftIO $ readIORef attr
     liftIO $ writeIORef attr $! v + 1
@@ -185,7 +189,7 @@ main4 n m j =  do
   mapM_ (\ f -> takeMVar f) (concat fs)
 
 
-method5 :: Int -> IORef Int -> TQueue (() -> ABS' ()) -> ABS' ()
+method5 :: Int -> IORef Int -> TQueue (() -> ContT () IO ()) -> ContT () IO ()
 method5 j attr t = do
     v <- liftIO $ readIORef attr
     liftIO $ writeIORef attr $! v + 1

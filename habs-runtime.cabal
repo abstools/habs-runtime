@@ -27,10 +27,6 @@ source-repository head
   type: git
   location: git://github.com/abstools/habs-runtime.git
   branch: master
-
-Flag wait-all-cogs 
-  Description: If enabled, the ABS program will not exit when the main-block process exits, but instead when all COGS cannot progress anymore
-  Default:     False
  
 
 library
@@ -50,6 +46,9 @@ library
     time,
     -- for implementing the random eff-exp
     random,
+    -- Cloud-ABS extension
+    distributed-process,
+    network-transport-tcp,
     cmdargs
   exposed-modules:
     -- name-clash-avoiding wrapper module used by the codegen 
@@ -70,8 +69,6 @@ library
     ABS.Runtime.TQueue
   ghc-options: -Wall -fno-warn-orphans
   hs-source-dirs: src
-  if flag(wait-all-cogs)
-    cpp-options: -DWAIT_ALL_COGS
     
     
 -- TEST SUITE
