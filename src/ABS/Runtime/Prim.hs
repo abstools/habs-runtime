@@ -20,11 +20,12 @@ import ABS.Runtime.TQueue (TQueue (..), newTQueueIO, writeTQueue, readTQueue)
 import ABS.Runtime.Extension.Exception hiding (throw, catch)
 import Control.Concurrent (ThreadId, myThreadId, newEmptyMVar, isEmptyMVar, putMVar, readMVar, forkIO, threadDelay)
 import Control.Concurrent.STM (atomically, readTVar, readTVarIO, writeTVar)    
-import Control.Distributed.Process (Process, spawnLocal)
+import Control.Distributed.Process (Process, spawnLocal, receiveWait, unClosure, match, matchSTM)
 import Control.Distributed.Process.Node (newLocalNode, initRemoteTable, runProcess)
 import Network.Transport.TCP (createTransport, defaultTCPParameters)
 
 import Control.Monad.Trans.Cont (evalContT, callCC)
+import Control.Monad.Trans.Class (lift)
 import Control.Monad.IO.Class (liftIO)
 import Data.IORef (newIORef, readIORef, writeIORef, modifyIORef')
 import System.IO.Unsafe (unsafePerformIO)
@@ -95,7 +96,10 @@ back' :: Cog -> ABS' ()
 back' (Cog thisSleepTable thisMailBox) = do
   (mwoken, st') <- liftIO $ findWoken =<< readIORef thisSleepTable                                                 
   case mwoken of
-    Nothing -> join $ liftIO $ atomically $ readTQueue thisMailBox
+    Nothing -> join $ lift $ receiveWait
+      [ match unClosure
+      , matchSTM (readTQueue thisMailBox) pure
+      ] 
     Just woken -> do
                 liftIO $ writeIORef thisSleepTable st' -- the sleep-table was modified, so write it back
                 woken
@@ -281,7 +285,11 @@ new initFun objSmartCon = do
                 -- create the init process on the new Cog
                 _ <- spawnLocal $ do
                             initFun newObj'
-                            liftIO (atomically $ readTQueue newCogMailBox) >>= evalContT -- init method exits, does not have to findWoken because there can be no other processes yet
+                            evalContT =<< receiveWait
+                                            [ match unClosure
+                                            , matchSTM (readTQueue newCogMailBox) pure
+                                            ]
+                            -- init method exits, does not have to findWoken because there can be no other processes yet
                 return newObj'
 
 
