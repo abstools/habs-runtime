@@ -52,7 +52,9 @@ library
     cmdargs
   exposed-modules:
     -- name-clash-avoiding wrapper module used by the codegen 
-    ABS.Runtime
+    ABS.Runtime,
+    -- exposed, because it is needed by boilerplate CloudHaskell code generation
+    ABS.Runtime.TQueue
   other-modules:
     -- data structures used by the Runtime
     ABS.Runtime.Base,
@@ -65,8 +67,7 @@ library
     -- the extension for exception constructs (try/catch/finally) and certain builtin exception datatypes
     ABS.Runtime.Extension.Exception,
     -- a runtime & syntax (in habs-parser) extension to support Promises
-    ABS.Runtime.Extension.Promise,
-    ABS.Runtime.TQueue
+    ABS.Runtime.Extension.Promise
   ghc-options: -Wall -fno-warn-orphans
   hs-source-dirs: src
     

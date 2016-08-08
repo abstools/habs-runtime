@@ -6,7 +6,7 @@ module ABS.Runtime
     , module ABS.Runtime.Extension.Promise
     ) where
 
-import ABS.Runtime.Base (ABS', Sub' (..), Obj' (..), Fut, IORef', Null', Time)
+import ABS.Runtime.Base (ABS', Sub' (..), Obj' (..), Fut, IORef', Null', Time, Cog' (..), DC)
 import ABS.Runtime.Prim
 import ABS.Runtime.Extension.IO
 import ABS.Runtime.Extension.Exception
