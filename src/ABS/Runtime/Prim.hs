@@ -4,7 +4,7 @@ module ABS.Runtime.Prim
     , suspend, awaitFuture', awaitBool', get
     , awaitFutures'
     , awaitFutureField', ChangedFuture' (..)
-    , new, newlocal'
+    , new, newlocal', spawn'
     , sync', (<..>), (<!>), (<!!>), awaitSugar'
     , skip, main_is'
     , while, while'
@@ -20,7 +20,7 @@ import ABS.Runtime.TQueue (TQueue (..), newTQueueIO, writeTQueue, readTQueue)
 import ABS.Runtime.Extension.Exception hiding (throw, catch)
 import Control.Concurrent (ThreadId, myThreadId, newEmptyMVar, isEmptyMVar, putMVar, readMVar, forkIO, threadDelay)
 import Control.Concurrent.STM (atomically, readTVar, readTVarIO, writeTVar)    
-import Control.Distributed.Process (Process, NodeId(..), spawnLocal, receiveWait, unClosure, match, matchSTM, getSelfPid)
+import Control.Distributed.Process (Process, NodeId(..), Closure, spawn, spawnLocal, receiveWait, unClosure, match, matchSTM, getSelfPid)
 import Control.Distributed.Process.Node ( newLocalNode, initRemoteTable, runProcess)
 import Control.Distributed.Process.Internal.Types (nullProcessId)
 import Network.Transport.TCP (createTransport, defaultTCPParameters, encodeEndPointAddress)
@@ -314,6 +314,11 @@ newlocal' (Obj' _ thisCog@(Cog' _ _ _ cogCounter) _) initFun objSmartCon = do
                 initFun newObj'
 
                 return newObj'
+{-# INLINE spawn' #-}
+spawn' :: NodeId -> Closure (Process ()) -> Process (Obj' a)
+spawn' dc p = do
+  pid <- spawn dc p
+  pure (Obj' undefined (Cog' undefined undefined pid undefined) 0)
 
 
 {-# INLINE get #-}
