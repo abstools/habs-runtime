@@ -52,7 +52,11 @@ import System.Random (randomRIO)
 {-# NOINLINE null #-}
 null :: Obj' Null'
 null = Obj' (unsafePerformIO $ newIORef undefined) -- its object contents
-            (Cog' (throw NullException) (throw NullException) (nullProcessId $ NodeId $ encodeEndPointAddress "0.0.0.0" "0" 0)) -- its COG
+            (Cog' (throw NullException) 
+                  (throw NullException) 
+                  (nullProcessId $ NodeId $ encodeEndPointAddress "0.0.0.0" "0" 0)
+                  (throw NullException)) -- its COG
+            0
 
 {-# NOINLINE nullFuture' #-}
 nullFuture' :: Fut a
@@ -62,7 +66,7 @@ nullFuture' = unsafePerformIO $ newEmptyMVar
 -- | Optimized suspend by avoiding capturing current-continuation if the method will be reactivated immediately:
 -- implemented by inlining back' function and using a custom TQueue that exposes the otherwise abstract datatype TQueue.
 suspend :: Obj' this -> ABS' ()
-suspend (Obj' _ (Cog' thisSleepTable thisMailBox@(TQueue tread twrite) _)) = do
+suspend (Obj' _ (Cog' thisSleepTable thisMailBox@(TQueue tread twrite) _ _) _) = do
   (mwoken, st') <- liftIO $ findWoken =<< readIORef thisSleepTable                                                 
   case mwoken of
     Nothing -> do
@@ -94,7 +98,7 @@ suspend (Obj' _ (Cog' thisSleepTable thisMailBox@(TQueue tread twrite) _)) = do
 
 {-# INLINE back' #-}
 back' :: Cog' -> ABS' ()
-back' (Cog' thisSleepTable thisMailBox _) = do
+back' (Cog' thisSleepTable thisMailBox _ _) = do
   (mwoken, st') <- liftIO $ findWoken =<< readIORef thisSleepTable                                                 
   case mwoken of
     Nothing -> join $ lift $ receiveWait
@@ -129,7 +133,7 @@ handlers' = [ Handler $ \ (ex :: AssertionFailed) -> liftIO $ hPrint stderr ex >
 
 {-# INLINABLE awaitFuture' #-}
 awaitFuture' :: Obj' this -> Fut a -> ABS' ()
-awaitFuture' (Obj' _ thisCog@(Cog' _ thisMailBox _)) fut = do
+awaitFuture' (Obj' _ thisCog@(Cog' _ thisMailBox _ _) _) fut = do
   empty <- liftIO $ isEmptyMVar fut -- according to ABS' semantics it should continue right away, hence this test.
   when empty $
     callCC (\ k -> do
@@ -140,7 +144,7 @@ awaitFuture' (Obj' _ thisCog@(Cog' _ thisMailBox _)) fut = do
 
 {-# INLINABLE awaitFutures' #-}
 awaitFutures' :: Obj' this -> [IO Bool] -> IO a -> ABS' ()
-awaitFutures' (Obj' _ thisCog@(Cog' _ thisMailBox _)) pollingTest blockingAction = do
+awaitFutures' (Obj' _ thisCog@(Cog' _ thisMailBox _ _) _) pollingTest blockingAction = do
   someEmpty <- liftIO $ orM pollingTest -- according to ABS' semantics it should continue right away, hence this test.
   when someEmpty $
     callCC (\ k -> do
@@ -172,7 +176,7 @@ awaitFutureField' :: Typeable a
                   -> (([ThreadId] -> [ThreadId]) -> this -> this) 
                   -> Fut a 
                   -> ABS' ()
-awaitFutureField' (Obj' this' thisCog@(Cog' _ thisMailBox _)) setter mvar = do
+awaitFutureField' (Obj' this' thisCog@(Cog' _ thisMailBox _ _) _) setter mvar = do
   empty <- liftIO $ isEmptyMVar mvar -- according to ABS' semantics it should continue right away, hence this test.
   when empty $
     callCC (\ k -> do
@@ -193,7 +197,7 @@ instance (Typeable a) => Exception (ChangedFuture' a)
 
 {-# INLINABLE awaitBool' #-}
 awaitBool' :: Obj' thisContents -> (thisContents -> Bool) -> ABS' ()
-awaitBool' (Obj' thisContentsRef (Cog' thisSleepTable thisMailBox _)) testFun = do
+awaitBool' (Obj' thisContentsRef (Cog' thisSleepTable thisMailBox _ _) _) testFun = do
   thisContents <- liftIO $ readIORef thisContentsRef
   unless (testFun thisContents) $
     callCC (\ k -> do
@@ -208,7 +212,7 @@ awaitBool' (Obj' thisContentsRef (Cog' thisSleepTable thisMailBox _)) testFun = 
 {-# INLINABLE awaitDuration' #-}
 -- | in seconds, ignores second argument tmax
 awaitDuration' :: Obj' this -> Ratio Int -> Ratio Int -> ABS' ()
-awaitDuration' (Obj' _ thisCog@(Cog' _ thisMailBox _)) tmin _tmax = 
+awaitDuration' (Obj' _ thisCog@(Cog' _ thisMailBox _ _) _) tmin _tmax = 
   callCC (\ k -> do
                   _ <- liftIO $ forkIO (do
                                     threadDelay $ truncate $ tmin * 1000000 -- seconds to microseconds
@@ -219,7 +223,7 @@ awaitDuration' (Obj' _ thisCog@(Cog' _ thisMailBox _)) tmin _tmax =
 {-# INLINE sync' #-}
 -- | sync
 sync' :: Obj' this -> Obj' a -> (Obj' a -> ABS' r) -> ABS' r
-sync' (Obj' _ (Cog' _ thisCogToken _)) callee@(Obj' _ (Cog' _ calleeCogToken _)) methodPartiallyApplied = 
+sync' (Obj' _ (Cog' _ thisCogToken _ _) _) callee@(Obj' _ (Cog' _ calleeCogToken _ _) _) methodPartiallyApplied = 
     if calleeCogToken == thisCogToken
     then methodPartiallyApplied callee
     else throw SyncOnDifferentCOG
@@ -232,7 +236,7 @@ sync' (Obj' _ (Cog' _ thisCogToken _)) callee@(Obj' _ (Cog' _ calleeCogToken _))
 {-# INLINABLE (<!>) #-}
 -- | async, unlifted
 (<!>) :: Obj' a -> (Obj' a -> ABS' b) -> IO (Fut b)
-(<!>) obj@(Obj' _ otherCog@(Cog' _ otherMailBox _)) methodPartiallyApplied = do
+(<!>) obj@(Obj' _ otherCog@(Cog' _ otherMailBox _ _) _) methodPartiallyApplied = do
   fut <- newEmptyMVar 
   atomically $ writeTQueue otherMailBox (do
                               res <- methodPartiallyApplied obj `catches` handlers'
@@ -244,7 +248,7 @@ sync' (Obj' _ (Cog' _ thisCogToken _)) callee@(Obj' _ (Cog' _ calleeCogToken _))
 {-# INLINABLE (<!!>) #-}
 -- | fire&forget async, unlifted
 (<!!>) :: Obj' a -> (Obj' a -> ABS' b) -> IO ()
-(<!!>) obj@(Obj' _ otherCog@(Cog' _ otherMailBox _)) methodPartiallyApplied = 
+(<!!>) obj@(Obj' _ otherCog@(Cog' _ otherMailBox _ _) _) methodPartiallyApplied = 
   atomically $ writeTQueue otherMailBox (do
                -- we throw away the result (if we had "destiny" primitive then this optimization could not be easily applied
                (() <$ methodPartiallyApplied obj) `catches` handlers'
@@ -257,7 +261,7 @@ awaitSugar' :: Obj' this
             -> Obj' a -- ^ callee
             -> (Obj' a -> ABS' b) -- ^ method 
             -> ABS' ()
-awaitSugar' (Obj' _ thisCog@(Cog' _ thisMailBox _)) lhs obj@(Obj' _ otherCog@(Cog' _ otherMailBox _)) methodPartiallyApplied = 
+awaitSugar' (Obj' _ thisCog@(Cog' _ thisMailBox _ _) _) lhs obj@(Obj' _ otherCog@(Cog' _ otherMailBox _ _) _) methodPartiallyApplied = 
   callCC (\ k -> do
     liftIO $ atomically $ writeTQueue otherMailBox (do
                res <- methodPartiallyApplied obj `catches` handlers'
@@ -277,6 +281,7 @@ new initFun objSmartCon = do
                 -- create the cog
                 newCogSleepTable <- liftIO $ newIORef []
                 newCogMailBox <- liftIO $ newTQueueIO
+                newCogCounter <- liftIO $ newIORef 1
 
                 -- create the object
                 newObj'Contents <- liftIO $ newIORef objSmartCon
@@ -284,22 +289,26 @@ new initFun objSmartCon = do
                 -- create the init process on the new Cog
                 newPid <- spawnLocal $ do
                             self <- getSelfPid
-                            initFun (Obj' newObj'Contents (Cog' newCogSleepTable newCogMailBox self))
+                            initFun (Obj' newObj'Contents (Cog' newCogSleepTable newCogMailBox self newCogCounter) 0)
                             evalContT =<< receiveWait
                                             [ match unClosure
                                             , matchSTM (readTQueue newCogMailBox) pure
                                             ]
                             -- init method exits, does not have to findWoken because there can be no other processes yet
-                return (Obj' newObj'Contents (Cog' newCogSleepTable newCogMailBox newPid))
+                return (Obj' newObj'Contents (Cog' newCogSleepTable newCogMailBox newPid newCogCounter) 0)
 
 
 {-# INLINABLE newlocal' #-}
 -- | new local, unlifted
 newlocal' :: Obj' this -> (Obj' a -> Process ()) -> a -> Process (Obj' a)
-newlocal' (Obj' _ thisCog) initFun objSmartCon = do
+newlocal' (Obj' _ thisCog@(Cog' _ _ _ cogCounter) _) initFun objSmartCon = do
+                -- increase the cog counter
+                i <- liftIO $ readIORef cogCounter
+                liftIO $ writeIORef cogCounter $! i+1
+
                 -- create the object
                 newObj'Contents <- liftIO $ newIORef objSmartCon
-                let newObj' = Obj' newObj'Contents thisCog
+                let newObj' = Obj' newObj'Contents thisCog i
                 
                 -- Safe optimization: we call init directly from here, safe because init cannot yield (has type IO)
                 initFun newObj'
@@ -369,9 +378,10 @@ main_is' mainABS' = do
  node <- newLocalNode t initRemoteTable
  mb <- newTQueueIO
  st <- newIORef []
+ c <- newIORef 1
  runProcess node $ 
   case creator cmdOpt of
     [] -> do
       self <- getSelfPid
-      evalContT $ (mainABS' $ Obj' (error "runtime error: the main ABS' block tried to call 'this'") (Cog' st mb self)) `catches` handlers'
+      evalContT $ (mainABS' $ Obj' (error "runtime error: the main ABS' block tried to call 'this'") (Cog' st mb self c) 0) `catches` handlers'
     _ -> undefined

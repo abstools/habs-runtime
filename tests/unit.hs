@@ -99,7 +99,7 @@ case_future_forwarding = do
 
 case_await_boolean :: IO ()
 case_await_boolean = do
-  let inc this@(Obj' contents _) = do
+  let inc this@(Obj' contents _ _) = do
           liftIO $ threadDelay 10
           awaitBool' this (\ C { x = x } -> x == 0)             
           liftIO $ modifyIORef' contents (\ C { x = x } -> C { x = x + 1})             
@@ -107,7 +107,7 @@ case_await_boolean = do
           suspend this
           return ()
 
-  let dec this@(Obj' contents _) = do
+  let dec this@(Obj' contents _ _) = do
           liftIO $ threadDelay 10
           awaitBool' this (\ C { x = x } -> x == 1)             
           liftIO $ modifyIORef' contents (\ C { x = x } -> C { x = x - 1})             
@@ -115,7 +115,7 @@ case_await_boolean = do
           suspend this
           return ()
 
-  let check this@(Obj' contents _) = do
+  let check this@(Obj' contents _ _) = do
           C { x = x } <- liftIO $ readIORef contents             
           return x
 

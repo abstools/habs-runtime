@@ -23,7 +23,7 @@ instance Show (MVar a) where
 -- 1) a reference to its cog
 -- 2) its attributes placed in a mutable variable=IORef
 -- NB: we deviate from ABS by not providing ordering of object-refs
-data Obj' contents = Obj' (IORef contents) !Cog'
+data Obj' contents = Obj' (IORef contents) !Cog' Word
 
 -- no need for Eq (Obj a). it is done by boilerplate generation of instance Eq I
 -- instance Eq I where
@@ -36,12 +36,12 @@ data Obj' contents = Obj' (IORef contents) !Cog'
 --
 -- a process becomes active by acquiring&holding the COG's lock.
 -- a process deactivates (by suspend,await) by releasing the lock.
-data Cog' = Cog' (IORef SleepTable) (TQueue (ABS' ())) ProcessId
+data Cog' = Cog' (IORef SleepTable) (TQueue (ABS' ())) ProcessId (IORef Word)
 
 type DC = NodeId
 
 instance Eq Cog' where
-    (Cog' _ _ pid1) == (Cog' _ _ pid2) = pid1 == pid2
+    (Cog' _ _ pid1 _) == (Cog' _ _ pid2 _) = pid1 == pid2
 
 type SleepTable = [ (IO Bool     -- test function
                     ,ABS' ())  -- continuation
