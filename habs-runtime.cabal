@@ -47,7 +47,11 @@ library
     -- for implementing the random eff-exp
     random,
     -- Cloud-ABS extension
+    -- for serializing objects,futures,cogs
+    binary,
+    -- for process communication
     distributed-process,
+    -- network communication is through TCP
     network-transport-tcp,
     cmdargs
   exposed-modules:

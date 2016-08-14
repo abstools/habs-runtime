@@ -8,6 +8,7 @@ import Data.IORef (IORef)
 import Control.Monad.Trans.Cont (ContT)
 import Data.Time.Clock (NominalDiffTime) -- for realtime
 import Control.Distributed.Process (Process, NodeId, ProcessId)
+import Data.Binary
 
 -- | a future reference is a write-once locking var
 --
@@ -25,6 +26,12 @@ instance Show (MVar a) where
 -- NB: we deviate from ABS by not providing ordering of object-refs
 data Obj' contents = Obj' (IORef contents) !Cog' Word
 
+
+instance Binary (Obj' a) where
+  put (Obj' _ cog counter) = put cog *> put counter
+  get = Obj' undefined <$> get <*> get -- TODO: foreign store on the whole Obj'
+
+
 -- no need for Eq (Obj a). it is done by boilerplate generation of instance Eq I
 -- instance Eq I where
 --    I (Obj ioref1 _) == I (Obj ioref2 _) = ioref1 == ioref2
@@ -38,10 +45,16 @@ data Obj' contents = Obj' (IORef contents) !Cog' Word
 -- a process deactivates (by suspend,await) by releasing the lock.
 data Cog' = Cog' (IORef SleepTable) (TQueue (ABS' ())) ProcessId (IORef Word)
 
-type DC = NodeId
-
 instance Eq Cog' where
     (Cog' _ _ pid1 _) == (Cog' _ _ pid2 _) = pid1 == pid2
+
+instance Binary Cog' where
+  put (Cog' _ _ pid _) = put pid
+  get = do
+    pid <- get
+    pure (Cog' undefined undefined pid undefined)
+
+type DC = NodeId
 
 type SleepTable = [ (IO Bool     -- test function
                     ,ABS' ())  -- continuation

@@ -281,7 +281,7 @@ new initFun objSmartCon = do
                 -- create the cog
                 newCogSleepTable <- liftIO $ newIORef []
                 newCogMailBox <- liftIO $ newTQueueIO
-                newCogCounter <- liftIO $ newIORef 1
+                newCogCounter <- liftIO $ newIORef 2
 
                 -- create the object
                 newObj'Contents <- liftIO $ newIORef objSmartCon
@@ -289,13 +289,13 @@ new initFun objSmartCon = do
                 -- create the init process on the new Cog
                 newPid <- spawnLocal $ do
                             self <- getSelfPid
-                            initFun (Obj' newObj'Contents (Cog' newCogSleepTable newCogMailBox self newCogCounter) 0)
+                            initFun (Obj' newObj'Contents (Cog' newCogSleepTable newCogMailBox self newCogCounter) 1)
                             evalContT =<< receiveWait
                                             [ match unClosure
                                             , matchSTM (readTQueue newCogMailBox) pure
                                             ]
                             -- init method exits, does not have to findWoken because there can be no other processes yet
-                return (Obj' newObj'Contents (Cog' newCogSleepTable newCogMailBox newPid newCogCounter) 0)
+                return (Obj' newObj'Contents (Cog' newCogSleepTable newCogMailBox newPid newCogCounter) 1)
 
 
 {-# INLINABLE newlocal' #-}
@@ -318,7 +318,7 @@ newlocal' (Obj' _ thisCog@(Cog' _ _ _ cogCounter) _) initFun objSmartCon = do
 spawn' :: NodeId -> Closure (Process ()) -> Process (Obj' a)
 spawn' dc p = do
   pid <- spawn dc p
-  pure (Obj' undefined (Cog' undefined undefined pid undefined) 0)
+  pure (Obj' undefined (Cog' undefined undefined pid undefined) 1)
 
 
 {-# INLINE get #-}
@@ -383,7 +383,7 @@ main_is' mainABS' = do
  node <- newLocalNode t initRemoteTable
  mb <- newTQueueIO
  st <- newIORef []
- c <- newIORef 1
+ c <- newIORef 2
  runProcess node $ 
   case creator cmdOpt of
     [] -> do
