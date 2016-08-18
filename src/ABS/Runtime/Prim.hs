@@ -392,5 +392,7 @@ main_is' mainABS' = do
   case creator cmdOpt of
     [] -> do
       self <- getSelfPid
-      evalContT $ (mainABS' $ Obj' (error "runtime error: the main ABS' block tried to call 'this'") (Cog' st mb self c) 0) `catches` handlers'
+      evalContT $ do
+        (mainABS' $ Obj' (error "runtime error: the main ABS' block tried to call 'this'") (Cog' st mb self c) 0) `catches` handlers'
+        back' (Cog' st mb self c) -- this makes the VM node stay alive (only to be killed with ctrl+c) , -- TODO makes the tests/bench timeout
     _ -> undefined
