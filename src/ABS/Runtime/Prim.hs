@@ -4,7 +4,7 @@ module ABS.Runtime.Prim
     , suspend, awaitFuture', awaitBool', get
     , awaitFutures'
     , awaitFutureField', ChangedFuture' (..)
-    , new, newlocal', spawn', node'
+    , new, newlocal', spawn', pid'
     , sync', (<..>), (<!>), (<!!>), awaitSugar'
     , skip, main_is'
     , while, while'
@@ -20,7 +20,7 @@ import ABS.Runtime.TQueue (TQueue (..), newTQueueIO, writeTQueue, readTQueue)
 import ABS.Runtime.Extension.Exception hiding (throw, catch)
 import Control.Concurrent (ThreadId, myThreadId, newEmptyMVar, isEmptyMVar, putMVar, readMVar, forkIO, threadDelay)
 import Control.Concurrent.STM (atomically, readTVar, readTVarIO, writeTVar)    
-import Control.Distributed.Process (Process, NodeId(..), processNodeId, Closure, spawn, spawnLocal, receiveWait, unClosure, match, matchSTM, getSelfPid)
+import Control.Distributed.Process (Process, NodeId(..), ProcessId, Closure, spawn, spawnLocal, receiveWait, unClosure, match, matchSTM, getSelfPid)
 import Control.Distributed.Process.Node ( newLocalNode, initRemoteTable, runProcess)
 import Control.Distributed.Process.Internal.Types (nullProcessId)
 import Network.Transport.TCP (createTransport, defaultTCPParameters, encodeEndPointAddress)
@@ -370,9 +370,9 @@ random i = randomRIO (0, case compare i 0 of
                             EQ -> 0
                             LT -> i+1)
 
-{-# INLINE node' #-}
-node' :: Obj' a -> NodeId
-node' (Obj' _ (Cog' _ _ pid _) _) = processNodeId pid
+{-# INLINE pid' #-}
+pid' :: Obj' a -> ProcessId
+pid' (Obj' _ (Cog' _ _ pid _) _) = pid
 
 {-# INLINE main_is' #-}
 -- | This function takes an ABS'' main function in the module and executes the ABS' program.
