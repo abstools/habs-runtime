@@ -48,7 +48,7 @@ case_fifo = do
           suspend this
           println' "m2"
 
-  let main = withArgs [] $ main_is' (\ this -> do
+  let main = withArgs [] $ main_is' id (\ this -> do
                 o1 <- lift $ newlocal' this (const $ return ()) c'
                 o2 <- lift $ newlocal' this (const $ return ()) c'
                 fs <- replicateM 100 (liftIO $ do
@@ -80,7 +80,7 @@ case_future_forwarding = do
           println' (show res')
           return res'
 
-  let main = withArgs [] $ main_is' (\ this -> do
+  let main = withArgs [] $ main_is' id (\ this -> do
                 o1 <- lift $ new (const $ return ()) c'
                 o2 <- lift $ new (const $ return ()) c'
                 replicateM_ 100 (do
@@ -119,7 +119,7 @@ case_await_boolean = do
           C { x = x } <- liftIO $ readIORef contents             
           return x
 
-  let main = withArgs [] $ main_is' (\ this -> do
+  let main = withArgs [] $ main_is' id (\ this -> do
                 o1 <- lift $ new (const $ return ()) c'
                 fs <- replicateM 100 (liftIO $ do
                                  f1 <- o1 <!> dec
@@ -133,7 +133,7 @@ case_await_boolean = do
                 liftIO $ assertEqual "wrong last value" 0 res
                       )
 
-  let main_local = withArgs [] $ main_is' (\ this -> do
+  let main_local = withArgs [] $ main_is' id (\ this -> do
                 o1 <- lift $ newlocal' this (const $ return ()) c'
                 fs <- replicateM 100 (liftIO $ do
                                  f1 <- o1 <!> dec

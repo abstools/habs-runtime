@@ -20,7 +20,7 @@ import ABS.Runtime.TQueue (TQueue (..), newTQueueIO, writeTQueue, readTQueue)
 import ABS.Runtime.Extension.Exception hiding (throw, catch)
 import Control.Concurrent (ThreadId, myThreadId, newEmptyMVar, isEmptyMVar, putMVar, readMVar, forkIO, threadDelay)
 import Control.Concurrent.STM (atomically, readTVar, readTVarIO, writeTVar)    
-import Control.Distributed.Process (Process, NodeId(..), ProcessId, Closure, spawn, spawnLocal, receiveWait, unClosure, match, matchSTM, getSelfPid)
+import Control.Distributed.Process (Process, NodeId(..), ProcessId, Closure, RemoteTable, spawn, spawnLocal, receiveWait, unClosure, match, matchSTM, getSelfPid)
 import Control.Distributed.Process.Node ( newLocalNode, initRemoteTable, runProcess)
 import Control.Distributed.Process.Internal.Types (nullProcessId)
 import Network.Transport.TCP (createTransport, defaultTCPParameters, encodeEndPointAddress)
@@ -380,11 +380,11 @@ pid' (Obj' _ (Cog' _ _ pid _) _) = pid
 -- Note the mainABS' function expects a this object as input. This is only for unifying the method-block generation;
 -- the code-generator will safely catch if a main contains calls to this. This runtime, however, does not do such checks;
 -- if the user passes a main that uses this, the program will err.
-main_is' :: (Obj' contents -> ABS' ()) -> IO ()
-main_is' mainABS' = do
+main_is' :: (RemoteTable -> RemoteTable) -> (Obj' contents -> ABS' ()) -> IO ()
+main_is' allModulesRemoteTables mainABS'  = do
  hSetBuffering stderr LineBuffering
  Right t <- createTransport (ip cmdOpt) (port cmdOpt) defaultTCPParameters
- node <- newLocalNode t initRemoteTable
+ node <- newLocalNode t (allModulesRemoteTables initRemoteTable)
  mb <- newTQueueIO
  st <- newIORef []
  c <- newIORef 2
