@@ -36,16 +36,16 @@ data Obj' contents = Obj' (IORef contents) !Cog' Word
 instance Binary (Obj' a) where
   put o@(Obj' _ (Cog' _ _ pid _) counter) = do
     when (processNodeId pid == selfNode) $ 
-      (unsafePerformIO (modifyMVar_ foreignStore (pure . M.insert (pid,counter) (AnyObj o)))) `seq` pure ()
+      (unsafePerformIO (modifyMVar_ foreignStore' (pure . M.insert (pid,counter) (AnyObj' o)))) `seq` pure ()
     put pid *> put counter
   get = do
       pid <- get
       counter <- get
       if processNodeId pid == selfNode
-        then let m = M.lookup (pid,counter) $ unsafePerformIO (readMVar foreignStore)
+        then let m = M.lookup (pid,counter) $ unsafePerformIO (readMVar foreignStore')
              in case m of
                 -- or use the safer Data.Typeable.cast, or Data.Typeable.eqT
-                Just (AnyObj o) ->  -- unsafePerformIO (print "found foreign") `seq`
+                Just (AnyObj' o) ->  -- unsafePerformIO (print "found foreign") `seq`
                                     pure (unsafeCoerce o :: Obj' a)
                 _ -> fail "foreign table lookup fail"
         else pure $ Obj' undefined (Cog' undefined undefined pid undefined) counter
@@ -104,7 +104,7 @@ selfNode:: NodeId
 selfNode = NodeId $ encodeEndPointAddress (ip cmdOpt) (port cmdOpt) 0
 
 
-{-# NOINLINE foreignStore #-}
-foreignStore :: MVar (M.Map (ProcessId,Word) AnyObj)
-foreignStore = unsafePerformIO $ newMVar M.empty
-data AnyObj = forall a. AnyObj (Obj' a)
+{-# NOINLINE foreignStore' #-}
+foreignStore' :: MVar (M.Map (ProcessId,Word) AnyObj')
+foreignStore' = unsafePerformIO $ newMVar M.empty
+data AnyObj' = forall a. AnyObj' (Obj' a)
