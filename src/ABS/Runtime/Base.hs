@@ -1,14 +1,20 @@
-{-# LANGUAGE MultiParamTypeClasses, EmptyDataDecls, FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses, EmptyDataDecls, FlexibleInstances, ExistentialQuantification #-}
 -- | All the types and datastructures used in the ABS-Haskell runtime
 module ABS.Runtime.Base where
 
-import Control.Concurrent.MVar (MVar) -- futures
+import ABS.Runtime.CmdOpt
+import Control.Concurrent.MVar (MVar, newMVar, modifyMVar_, readMVar) -- futures
 import ABS.Runtime.TQueue (TQueue) -- mailbox
 import Data.IORef (IORef)
 import Control.Monad.Trans.Cont (ContT)
 import Data.Time.Clock (NominalDiffTime) -- for realtime
-import Control.Distributed.Process (Process, NodeId, ProcessId)
+import Control.Distributed.Process (Process, NodeId (..), ProcessId, processNodeId)
+import Network.Transport.TCP (encodeEndPointAddress)
 import Data.Binary
+import System.IO.Unsafe (unsafePerformIO)
+import Unsafe.Coerce (unsafeCoerce)
+import Control.Monad (when)
+import qualified Data.Map.Strict as M (Map, empty, insert, lookup)
 
 -- | a future reference is a write-once locking var
 --
@@ -28,8 +34,21 @@ data Obj' contents = Obj' (IORef contents) !Cog' Word
 
 
 instance Binary (Obj' a) where
-  put (Obj' _ cog counter) = put cog *> put counter
-  get = Obj' undefined <$> get <*> get -- TODO: foreign store on the whole Obj'
+  put o@(Obj' _ (Cog' _ _ pid _) counter) = do
+    when (processNodeId pid == selfNode) $ 
+      (unsafePerformIO (modifyMVar_ foreignStore (pure . M.insert (pid,counter) (AnyObj o)))) `seq` pure ()
+    put pid *> put counter
+  get = do
+      pid <- get
+      counter <- get
+      if processNodeId pid == selfNode
+        then let m = M.lookup (pid,counter) $ unsafePerformIO (readMVar foreignStore)
+             in case m of
+                -- or use the safer Data.Typeable.cast, or Data.Typeable.eqT
+                Just (AnyObj o) ->  -- unsafePerformIO (print "found foreign") `seq`
+                                    pure (unsafeCoerce o :: Obj' a)
+                _ -> fail "foreign table lookup fail"
+        else pure $ Obj' undefined (Cog' undefined undefined pid undefined) counter
 
 
 -- no need for Eq (Obj a). it is done by boilerplate generation of instance Eq I
@@ -48,11 +67,11 @@ data Cog' = Cog' (IORef SleepTable) (TQueue (ABS' ())) ProcessId (IORef Word)
 instance Eq Cog' where
     (Cog' _ _ pid1 _) == (Cog' _ _ pid2 _) = pid1 == pid2
 
-instance Binary Cog' where
-  put (Cog' _ _ pid _) = put pid
-  get = do
-    pid <- get
-    pure (Cog' undefined undefined pid undefined)
+--instance Binary Cog' where
+--  put (Cog' _ _ pid _) = put pid
+--  get = do
+--    pid <- get
+--    pure (Cog' undefined undefined pid undefined)
 
 type DC = NodeId
 
@@ -80,3 +99,12 @@ data Null'
 -- for realtime
 type Time = NominalDiffTime
 
+{-# NOINLINE selfNode #-}
+selfNode:: NodeId
+selfNode = NodeId $ encodeEndPointAddress (ip cmdOpt) (port cmdOpt) 0
+
+
+{-# NOINLINE foreignStore #-}
+foreignStore :: MVar (M.Map (ProcessId,Word) AnyObj)
+foreignStore = unsafePerformIO $ newMVar M.empty
+data AnyObj = forall a. AnyObj (Obj' a)

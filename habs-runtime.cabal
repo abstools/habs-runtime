@@ -49,6 +49,7 @@ library
     -- Cloud-ABS extension
     -- for serializing objects,futures,cogs
     binary,
+    containers,
     -- for process communication
     distributed-process,
     -- network communication is through TCP
