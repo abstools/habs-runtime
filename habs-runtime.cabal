@@ -10,7 +10,7 @@ homepage: http://abs-models.org
 bug-reports: https://github.com/abstools/habs-runtime/issues
 
 stability: provisional
-tested-with: GHC == 7.10.1, GHC == 7.10.2, GHC == 7.10.3
+tested-with: GHC == 7.10.1, GHC == 7.10.2, GHC == 7.10.3, GHC == 8.0.1
 build-type: Simple
 cabal-version: >= 1.8
 
@@ -43,7 +43,7 @@ library
     -- we use STM's TQueue for our mailbox datastructure
     stm>=2.4,
     -- generating fmap for n-functors (functor,bifunctor,trifunctor...) and thus implementing covariance of subtyping
-    genifunctors>=0.3,
+    -- genifunctors>=0.3,
     -- for lifting exceptions to ABS monad and so to implement the exceptions extension for ABS
     exceptions,
     -- for soft-realtime extension
