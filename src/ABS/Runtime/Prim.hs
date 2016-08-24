@@ -28,18 +28,18 @@ import System.IO.Unsafe (unsafePerformIO)
 
 import Prelude hiding (null)
 import Control.Monad ((<$!>), when, unless, join)
-import Control.Exception (Exception, SomeException, throw, evaluate)
+import Control.Exception (Exception, throw, evaluate)
 import Control.Monad.Catch (catch, catches, Handler (..))
 import Data.Time.Clock.POSIX (getPOSIXTime) -- for realtime
 import qualified System.Exit (exitFailure)
-import System.IO (hSetBuffering, BufferMode (LineBuffering), hPutStrLn, hPrint, stderr)
+import System.IO (hSetBuffering, BufferMode (LineBuffering), hPutStrLn, hPrint, stderr, stdout)
 import Data.Ratio (Ratio)
 import Data.Typeable
 import Data.List (delete)
 import System.Random (randomRIO)
 
 #ifdef WAIT_ALL_COGS
-import Control.Exception (try,mask)
+import Control.Exception (SomeException,try,mask)
 import Control.Concurrent.STM (retry)
 import Control.Concurrent.STM.TVar (TVar, newTVarIO, modifyTVar')
 import Foreign.StablePtr
@@ -155,13 +155,13 @@ awaitFutures' (Obj' _ thisCog@(Cog _ thisMailBox)) pollingTest blockingAction = 
                                     _ <- blockingAction    -- wait for future to be resolved
                                     atomically $ writeTQueue thisMailBox (k ()))
                   back' thisCog)
-
-orM :: [IO Bool] -> IO Bool
-orM []          = return False
-orM (p:ps)      = do
+  where
+    orM :: [IO Bool] -> IO Bool
+    orM []          = pure False
+    orM (p:ps)      = do
         q <- p
         if q
-          then return True
+          then pure True
           else orM ps
 
 ---- taken from package monad-loops
@@ -372,7 +372,8 @@ random i = randomRIO (0, case compare i 0 of
 -- if the user passes a main that uses this, the program will err.
 main_is' :: (Obj' contents -> ABS' ()) -> IO ()
 main_is' mainABS' = do
- hSetBuffering stderr LineBuffering
+ hSetBuffering stdout LineBuffering -- needed by EasyInterface's streaming. Default in linux-like is BlockBuffering
+ hSetBuffering stderr LineBuffering -- needed by golden tests. Default in linux-like is NoBuffering
  runInUnboundThread $ do
 #ifdef WAIT_ALL_COGS
   _ <- forkIO__tg $ do
