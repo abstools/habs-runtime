@@ -12,6 +12,7 @@ module ABS.Runtime.Prim
     -- * primitives for soft-realtime extension
     , now, duration, awaitDuration'
     , random
+    , smart'SimDC, init'SimDC
     ) where
 
 import ABS.Runtime.Base
@@ -63,7 +64,7 @@ forkIO__tg action = mask $ \restore -> do
 null :: Obj' Null'
 null = Obj' (unsafePerformIO $ newIORef undefined) -- its object contents
             (Cog (throw NullException) (throw NullException)) -- its COG
-
+            (DC null) -- circular ref
 {-# NOINLINE nullFuture' #-}
 nullFuture' :: Fut a
 nullFuture' = unsafePerformIO $ newEmptyMVar
@@ -72,7 +73,7 @@ nullFuture' = unsafePerformIO $ newEmptyMVar
 -- | Optimized suspend by avoiding capturing current-continuation if the method will be reactivated immediately:
 -- implemented by inlining back' function and using a custom TQueue that exposes the otherwise abstract datatype TQueue.
 suspend :: Obj' this -> ABS' ()
-suspend (Obj' _ (Cog thisSleepTable thisMailBox@(TQueue tread twrite))) = do
+suspend (Obj' _ (Cog thisSleepTable thisMailBox@(TQueue tread twrite)) _) = do
   (mwoken, st') <- lift $ findWoken =<< readIORef thisSleepTable                                                 
   case mwoken of
     Nothing -> do
@@ -136,7 +137,7 @@ handlers' = [ Handler $ \ (ex :: AssertionFailed) -> lift $ hPrint stderr ex >> 
 
 {-# INLINABLE awaitFuture' #-}
 awaitFuture' :: Obj' this -> Fut a -> ABS' ()
-awaitFuture' (Obj' _ thisCog@(Cog _ thisMailBox)) fut = do
+awaitFuture' (Obj' _ thisCog@(Cog _ thisMailBox) _) fut = do
   empty <- lift $ isEmptyMVar fut -- according to ABS' semantics it should continue right away, hence this test.
   when empty $
     callCC (\ k -> do
@@ -147,7 +148,7 @@ awaitFuture' (Obj' _ thisCog@(Cog _ thisMailBox)) fut = do
 
 {-# INLINABLE awaitFutures' #-}
 awaitFutures' :: Obj' this -> [IO Bool] -> IO a -> ABS' ()
-awaitFutures' (Obj' _ thisCog@(Cog _ thisMailBox)) pollingTest blockingAction = do
+awaitFutures' (Obj' _ thisCog@(Cog _ thisMailBox) _) pollingTest blockingAction = do
   someEmpty <- lift $ orM pollingTest -- according to ABS' semantics it should continue right away, hence this test.
   when someEmpty $
     callCC (\ k -> do
@@ -179,7 +180,7 @@ awaitFutureField' :: Typeable a
                   -> (([ThreadId] -> [ThreadId]) -> this -> this) 
                   -> Fut a 
                   -> ABS' ()
-awaitFutureField' (Obj' this' thisCog@(Cog _ thisMailBox)) setter mvar = do
+awaitFutureField' (Obj' this' thisCog@(Cog _ thisMailBox) _) setter mvar = do
   empty <- lift $ isEmptyMVar mvar -- according to ABS' semantics it should continue right away, hence this test.
   when empty $
     callCC (\ k -> do
@@ -200,7 +201,7 @@ instance (Typeable a) => Exception (ChangedFuture' a)
 
 {-# INLINABLE awaitBool' #-}
 awaitBool' :: Obj' thisContents -> (thisContents -> Bool) -> ABS' ()
-awaitBool' (Obj' thisContentsRef (Cog thisSleepTable thisMailBox)) testFun = do
+awaitBool' (Obj' thisContentsRef (Cog thisSleepTable thisMailBox) _) testFun = do
   thisContents <- lift $ readIORef thisContentsRef
   unless (testFun thisContents) $
     callCC (\ k -> do
@@ -215,7 +216,7 @@ awaitBool' (Obj' thisContentsRef (Cog thisSleepTable thisMailBox)) testFun = do
 {-# INLINABLE awaitDuration' #-}
 -- | in seconds, ignores second argument tmax
 awaitDuration' :: Obj' this -> Ratio Int -> Ratio Int -> ABS' ()
-awaitDuration' (Obj' _ thisCog@(Cog _ thisMailBox)) tmin _tmax = 
+awaitDuration' (Obj' _ thisCog@(Cog _ thisMailBox) _) tmin _tmax = 
   callCC (\ k -> do
                   _ <- lift $ forkIO (do
                                     threadDelay $ truncate $ tmin * 1000000 -- seconds to microseconds
@@ -226,7 +227,7 @@ awaitDuration' (Obj' _ thisCog@(Cog _ thisMailBox)) tmin _tmax =
 {-# INLINE sync' #-}
 -- | sync
 sync' :: Obj' this -> Obj' a -> (Obj' a -> ABS' r) -> ABS' r
-sync' (Obj' _ (Cog _ thisCogToken)) callee@(Obj' _ (Cog _ calleeCogToken)) methodPartiallyApplied = 
+sync' (Obj' _ (Cog _ thisCogToken) _) callee@(Obj' _ (Cog _ calleeCogToken) _) methodPartiallyApplied = 
     if calleeCogToken == thisCogToken
     then methodPartiallyApplied callee
     else throw SyncOnDifferentCOG
@@ -239,7 +240,7 @@ sync' (Obj' _ (Cog _ thisCogToken)) callee@(Obj' _ (Cog _ calleeCogToken)) metho
 {-# INLINABLE (<!>) #-}
 -- | async, unlifted
 (<!>) :: Obj' a -> (Obj' a -> ABS' b) -> IO (Fut b)
-(<!>) obj@(Obj' _ otherCog@(Cog _ otherMailBox)) methodPartiallyApplied = do
+(<!>) obj@(Obj' _ otherCog@(Cog _ otherMailBox) _) methodPartiallyApplied = do
   fut <- newEmptyMVar 
   atomically $ writeTQueue otherMailBox (do
                               res <- methodPartiallyApplied obj `catches` handlers'
@@ -251,7 +252,7 @@ sync' (Obj' _ (Cog _ thisCogToken)) callee@(Obj' _ (Cog _ calleeCogToken)) metho
 {-# INLINABLE (<!!>) #-}
 -- | fire&forget async, unlifted
 (<!!>) :: Obj' a -> (Obj' a -> ABS' b) -> IO ()
-(<!!>) obj@(Obj' _ otherCog@(Cog _ otherMailBox)) methodPartiallyApplied = 
+(<!!>) obj@(Obj' _ otherCog@(Cog _ otherMailBox) _) methodPartiallyApplied = 
   atomically $ writeTQueue otherMailBox (do
                -- we throw away the result (if we had "destiny" primitive then this optimization could not be easily applied
                (() <$ methodPartiallyApplied obj) `catches` handlers'
@@ -264,7 +265,7 @@ awaitSugar' :: Obj' this
             -> Obj' a -- ^ callee
             -> (Obj' a -> ABS' b) -- ^ method 
             -> ABS' ()
-awaitSugar' (Obj' _ thisCog@(Cog _ thisMailBox)) lhs obj@(Obj' _ otherCog@(Cog _ otherMailBox)) methodPartiallyApplied = 
+awaitSugar' (Obj' _ thisCog@(Cog _ thisMailBox) _) lhs obj@(Obj' _ otherCog@(Cog _ otherMailBox) _) methodPartiallyApplied = 
   callCC (\ k -> do
     lift $ atomically $ writeTQueue otherMailBox (do
                res <- methodPartiallyApplied obj `catches` handlers'
@@ -279,8 +280,8 @@ awaitSugar' (Obj' _ thisCog@(Cog _ thisMailBox)) lhs obj@(Obj' _ otherCog@(Cog _
 
 {-# INLINABLE new #-}
 -- | new, unlifted
-new :: (Obj' a -> IO ()) -> a -> IO (Obj' a)
-new initFun objSmartCon = do
+new :: DC -> (Obj' a -> IO ()) -> a -> IO (Obj' a)
+new dc initFun objSmartCon = do
                 -- create the cog
                 newCogSleepTable <- newIORef []
                 newCogMailBox <- newTQueueIO
@@ -288,7 +289,7 @@ new initFun objSmartCon = do
 
                 -- create the object
                 newObj'Contents <- newIORef objSmartCon
-                let newObj' = Obj' newObj'Contents newCog
+                let newObj' = Obj' newObj'Contents newCog dc
 
                 -- create the init process on the new Cog
 #ifdef WAIT_ALL_COGS
@@ -304,10 +305,10 @@ new initFun objSmartCon = do
 {-# INLINABLE newlocal' #-}
 -- | new local, unlifted
 newlocal' :: Obj' this -> (Obj' a -> IO ()) -> a -> IO (Obj' a)
-newlocal' (Obj' _ thisCog) initFun objSmartCon = do
+newlocal' (Obj' _ thisCog thisDC) initFun objSmartCon = do
                 -- create the object
                 newObj'Contents <- newIORef objSmartCon
-                let newObj' = Obj' newObj'Contents thisCog
+                let newObj' = Obj' newObj'Contents thisCog thisDC
                 
                 -- Safe optimization: we call init directly from here, safe because init cannot yield (has type IO)
                 initFun newObj'
@@ -379,10 +380,21 @@ main_is' mainABS' = do
   _ <- forkIO__tg $ do
 #endif
       _ <- evaluate cmdOpt           -- force the cmdopt parsing, otherwise will not run even --help
+      
+      -- create the DC object (and its independent cog)
+      dcCogSleepTable <- newIORef []
+      dcCogMailBox <- newTQueueIO
+      let dcCog = Cog dcCogSleepTable dcCogMailBox
+
+      -- create the object
+      dcObj'Contents <- newIORef (smart'SimDC 0)
+      let dcObj' = Obj' dcObj'Contents dcCog (DC dcObj') -- circular ref
+      
+      -- create the main cog
       mb <- newTQueueIO
       st <- newIORef []
       evalContT $ do
-        (mainABS' $ Obj' (error "runtime error: the main ABS' block tried to call 'this'") (Cog st mb)) `catches` handlers'
+        (mainABS' $ Obj' (error "runtime error: the main ABS' block tried to call 'this'") (Cog st mb) (DC dcObj')) `catches` handlers'
 #ifdef WAIT_ALL_COGS
         back' (Cog st mb)
   t <- myThreadId
@@ -390,3 +402,43 @@ main_is' mainABS' = do
   atomically $ readTVar __tg >>= \n -> when (n >= 1) retry
   --freeStablePtr s
 #endif
+
+-- for simulating DC (extracted by code-generated src/ABS/DC.abs)
+
+data SimDC = SimDC{instrPS'SimDC :: Int}
+smart'SimDC :: Int -> SimDC
+smart'SimDC instrPS = SimDC{instrPS'SimDC = instrPS}
+
+init'SimDC :: Obj' SimDC -> IO ()
+init'SimDC this@(Obj' this' _ _) = pure ()
+
+instance DC' SimDC where
+        load rtype periods this@(Obj' this' _ _) = do lift (pure 0)
+        total rtype this@(Obj' this' _ _) = do lift (pure 0)
+        request__ nrInstr this@(Obj' this' _ _)
+          = do --lift (println (toString (fromIntegral nrInstr)))
+               (\ this'' ->
+                  if
+                    ((fromIntegral nrInstr) >
+                       (fromIntegral (instrPS'SimDC this'')))
+                    then
+                    do lift (duration 1 1)
+                       suspend this
+                       (\ this'' ->
+                          this <..>
+                            request__
+                              ((fromIntegral nrInstr) -
+                                 (fromIntegral (instrPS'SimDC this''))))
+                         =<< lift (readIORef this')
+                    else
+                    do remaining <- lift
+                                                    ((\ this'' ->
+                                                        newIORef
+                                                          ((fromIntegral nrInstr) /
+                                                             (fromIntegral
+                                                                (instrPS'SimDC this''))))
+                                                       =<< readIORef this')
+                       lift
+                         ((\ e1' -> duration e1' =<< readIORef remaining) =<<
+                            readIORef remaining))
+                 =<< lift (readIORef this')

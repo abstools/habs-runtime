@@ -1,4 +1,4 @@
-{-# LANGUAGE MultiParamTypeClasses, EmptyDataDecls, FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses, EmptyDataDecls, FlexibleInstances, ExistentialQuantification #-}
 -- | All the types and datastructures used in the ABS-Haskell runtime
 module ABS.Runtime.Base where
 
@@ -7,7 +7,8 @@ import ABS.Runtime.TQueue (TQueue) -- mailbox
 import Data.IORef (IORef)
 import Control.Monad.Trans.Cont (ContT)
 import Data.Time.Clock (NominalDiffTime) -- for realtime
-
+import Data.Ratio (Ratio)
+import Unsafe.Coerce (unsafeCoerce)
 -- | a future reference is a write-once locking var
 --
 -- write-once is not imposed by Haskell, but
@@ -22,7 +23,7 @@ instance Show (MVar a) where
 -- 1) a reference to its cog
 -- 2) its attributes placed in a mutable variable=IORef
 -- NB: we deviate from ABS by not providing ordering of object-refs
-data Obj' contents = Obj' (IORef contents) !Cog 
+data Obj' contents = Obj' (IORef contents) !Cog DC
 
 -- no need for Eq (Obj a). it is done by boilerplate generation of instance Eq I
 -- instance Eq I where
@@ -64,3 +65,37 @@ data Null'
 -- for realtime
 type Time = NominalDiffTime
 
+-- for simulating DC (extracted by code-generated src/ABS/DC.abs)
+
+data Resourcetype = Speed
+                  | Cores
+                  | Bandwidth
+                  | Memory
+                  | Startupduration
+                  | Shutdownduration
+                  | PaymentInterval
+                  | CostPerInterval
+                  deriving (Eq, Show)
+
+class DC' a where
+        load :: Resourcetype -> Int -> Obj' a -> ABS' (Ratio Int)
+        total :: Resourcetype -> Obj' a -> ABS' (Ratio Int)
+        request__ :: Int -> Obj' a -> ABS' ()
+
+data DC = forall a . DC' a => DC (Obj' a)
+
+instance Show DC where
+        show _ = "DC"
+
+instance Eq DC where
+        DC (Obj' ref1' _ _) == DC (Obj' ref2' _ _)
+          = ref1' == unsafeCoerce ref2'
+
+instance DC' Null' where
+        load = undefined
+        total = undefined
+        request__ = undefined
+
+
+instance DC' a => Sub' (Obj' a) DC where
+        up' = DC
