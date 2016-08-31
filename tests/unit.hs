@@ -79,9 +79,9 @@ case_future_forwarding = do
           println' (show res')
           return res'
 
-  let main = withArgs [] $ main_is' (\ this -> do
-                o1 <- lift $ new (const $ return ()) c'
-                o2 <- lift $ new (const $ return ()) c'
+  let main = withArgs [] $ main_is' (\ this@(Obj' _ _ thisDC) -> do
+                o1 <- lift $ new thisDC (const $ return ()) c'
+                o2 <- lift $ new thisDC (const $ return ()) c'
                 replicateM_ 100 (do
                                        f1 <- lift $ o1 <!> method1
                                        f2 <- lift $ o2 <!> method2 f1
@@ -98,7 +98,7 @@ case_future_forwarding = do
 
 case_await_boolean :: IO ()
 case_await_boolean = do
-  let inc this@(Obj' contents _) = do
+  let inc this@(Obj' contents _ _) = do
           lift $ threadDelay 10
           awaitBool' this (\ C { x = x } -> x == 0)             
           lift $ modifyIORef' contents (\ C { x = x } -> C { x = x + 1})             
@@ -106,7 +106,7 @@ case_await_boolean = do
           suspend this
           return ()
 
-  let dec this@(Obj' contents _) = do
+  let dec this@(Obj' contents _ _) = do
           lift $ threadDelay 10
           awaitBool' this (\ C { x = x } -> x == 1)             
           lift $ modifyIORef' contents (\ C { x = x } -> C { x = x - 1})             
@@ -114,12 +114,12 @@ case_await_boolean = do
           suspend this
           return ()
 
-  let check this@(Obj' contents _) = do
+  let check this@(Obj' contents _ _) = do
           C { x = x } <- lift $ readIORef contents             
           return x
 
-  let main = withArgs [] $ main_is' (\ this -> do
-                o1 <- lift $ new (const $ return ()) c'
+  let main = withArgs [] $ main_is' (\ this@(Obj' _ _ thisDC) -> do
+                o1 <- lift $ new thisDC (const $ return ()) c'
                 fs <- replicateM 100 (lift $ do
                                  f1 <- o1 <!> dec
                                  f2 <- o1 <!> inc
