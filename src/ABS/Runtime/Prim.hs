@@ -280,8 +280,8 @@ awaitSugar' (Obj' _ thisCog@(Cog _ thisMailBox) _) lhs obj@(Obj' _ otherCog@(Cog
 
 {-# INLINABLE new #-}
 -- | new, unlifted
-new :: (Obj' a -> IO ()) -> a -> DC -> IO (Obj' a)
-new initFun objSmartCon dc = do
+new :: DC -> (Obj' a -> IO ()) -> a -> IO (Obj' a)
+new dc initFun objSmartCon = do
                 -- create the cog
                 newCogSleepTable <- newIORef []
                 newCogMailBox <- newTQueueIO

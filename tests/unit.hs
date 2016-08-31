@@ -80,8 +80,8 @@ case_future_forwarding = do
           return res'
 
   let main = withArgs [] $ main_is' (\ this@(Obj' _ _ thisDC) -> do
-                o1 <- lift $ new (const $ return ()) c' thisDC
-                o2 <- lift $ new (const $ return ()) c' thisDC 
+                o1 <- lift $ new thisDC (const $ return ()) c'
+                o2 <- lift $ new thisDC (const $ return ()) c'
                 replicateM_ 100 (do
                                        f1 <- lift $ o1 <!> method1
                                        f2 <- lift $ o2 <!> method2 f1
@@ -119,7 +119,7 @@ case_await_boolean = do
           return x
 
   let main = withArgs [] $ main_is' (\ this@(Obj' _ _ thisDC) -> do
-                o1 <- lift $ new (const $ return ()) c' thisDC
+                o1 <- lift $ new thisDC (const $ return ()) c'
                 fs <- replicateM 100 (lift $ do
                                  f1 <- o1 <!> dec
                                  f2 <- o1 <!> inc
