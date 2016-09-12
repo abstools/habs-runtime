@@ -27,7 +27,18 @@ import qualified Control.Exception as I'
 
 default (Int, Rat)
 
-{-# LINE 5 "..\habs-runtime\src\ABS\DC.abs" #-}
+{-# LINE 11 "..\habs-runtime\src\ABS\DC.abs" #-}
+data InfRat = InfRat_
+            | Fin !Rat
+            deriving (I'.Eq, I'.Show)
+finvalue (Fin a) = a
+finvalue _
+  = I'.throw
+      (RecSelError
+         (concatenate "Data constructor does not have accessor "
+            "finvalue"))
+
+{-# LINE 13 "..\habs-runtime\src\ABS\DC.abs" #-}
 data Resourcetype = Speed
                   | Cores
                   | Bandwidth
@@ -36,53 +47,187 @@ data Resourcetype = Speed
                   | Shutdownduration
                   | PaymentInterval
                   | CostPerInterval
-                  deriving (I'.Eq, I'.Show)
+                  deriving (I'.Eq, I'.Show, I'.Ord)
 
-{-# LINE 15 "..\habs-runtime\src\ABS\DC.abs" #-}
-class DC' a where
-        {-# LINE 18 "..\habs-runtime\src\ABS\DC.abs" #-}
+{-# LINE 23 "..\habs-runtime\src\ABS\DC.abs" #-}
+class DeploymentComponent' a where
+        {-# LINE 24 "..\habs-runtime\src\ABS\DC.abs" #-}
         load :: Resourcetype -> Int -> Obj' a -> ABS' Rat
         
-        {-# LINE 20 "..\habs-runtime\src\ABS\DC.abs" #-}
-        total :: Resourcetype -> Obj' a -> ABS' Rat
+        {-# LINE 25 "..\habs-runtime\src\ABS\DC.abs" #-}
+        total :: Resourcetype -> Obj' a -> ABS' InfRat
         
-        {-# LINE 23 "..\habs-runtime\src\ABS\DC.abs" #-}
+        {-# LINE 26 "..\habs-runtime\src\ABS\DC.abs" #-}
+        transfer ::
+                 DeploymentComponent -> Rat -> Resourcetype -> Obj' a -> ABS' Unit
+        
+        {-# LINE 27 "..\habs-runtime\src\ABS\DC.abs" #-}
+        decrementResources :: Rat -> Resourcetype -> Obj' a -> ABS' Unit
+        
+        {-# LINE 28 "..\habs-runtime\src\ABS\DC.abs" #-}
+        incrementResources :: Rat -> Resourcetype -> Obj' a -> ABS' Unit
+        
+        {-# LINE 29 "..\habs-runtime\src\ABS\DC.abs" #-}
+        getName :: Obj' a -> ABS' String
+        
+        {-# LINE 31 "..\habs-runtime\src\ABS\DC.abs" #-}
+        getCreationTime :: Obj' a -> ABS' Time
+        
+        {-# LINE 32 "..\habs-runtime\src\ABS\DC.abs" #-}
+        getStartupDuration :: Obj' a -> ABS' Rat
+        
+        {-# LINE 33 "..\habs-runtime\src\ABS\DC.abs" #-}
+        getShutdownDuration :: Obj' a -> ABS' Rat
+        
+        {-# LINE 34 "..\habs-runtime\src\ABS\DC.abs" #-}
+        getPaymentInterval :: Obj' a -> ABS' Int
+        
+        {-# LINE 35 "..\habs-runtime\src\ABS\DC.abs" #-}
+        getCostPerInterval :: Obj' a -> ABS' Rat
+        
+        {-# LINE 36 "..\habs-runtime\src\ABS\DC.abs" #-}
+        getNumberOfCores :: Obj' a -> ABS' Rat
+        
+        {-# LINE 37 "..\habs-runtime\src\ABS\DC.abs" #-}
+        acquire :: Obj' a -> ABS' Bool
+        
+        {-# LINE 38 "..\habs-runtime\src\ABS\DC.abs" #-}
+        release :: Obj' a -> ABS' Bool
+        
+        {-# LINE 39 "..\habs-runtime\src\ABS\DC.abs" #-}
+        shutdown :: Obj' a -> ABS' Bool
+        
+        {-# LINE 42 "..\habs-runtime\src\ABS\DC.abs" #-}
         request__ :: Int -> Obj' a -> ABS' Unit
 
-data DC = forall a . DC' a => DC (Obj' a)
+data DeploymentComponent = forall a . DeploymentComponent' a =>
+                             DeploymentComponent (Obj' a)
 
-instance I'.Show DC where
-        show _ = "DC"
+instance I'.Show DeploymentComponent where
+        show _ = "DeploymentComponent"
 
-instance I'.Eq DC where
-        DC (Obj' ref1' _) == DC (Obj' ref2' _)
+instance I'.Eq DeploymentComponent where
+        DeploymentComponent (Obj' ref1' _ _) ==
+          DeploymentComponent (Obj' ref2' _ _)
           = ref1' == I'.unsafeCoerce ref2'
 
-instance DC' Null' where
+instance DeploymentComponent' Null' where
         load = I'.undefined
         total = I'.undefined
+        transfer = I'.undefined
+        decrementResources = I'.undefined
+        incrementResources = I'.undefined
+        getName = I'.undefined
+        getCreationTime = I'.undefined
+        getStartupDuration = I'.undefined
+        getShutdownDuration = I'.undefined
+        getPaymentInterval = I'.undefined
+        getCostPerInterval = I'.undefined
+        getNumberOfCores = I'.undefined
+        acquire = I'.undefined
+        release = I'.undefined
+        shutdown = I'.undefined
         request__ = I'.undefined
 
-instance DC' a => Sub' (Obj' a) DC where
-        up' = DC
+instance DeploymentComponent' a => Sub' (Obj' a)
+         DeploymentComponent where
+        up' = DeploymentComponent
 
-{-# LINE 26 "..\habs-runtime\src\ABS\DC.abs" #-}
-data SimDC = SimDC{instrPS'SimDC :: Int}
-smart'SimDC instrPS = SimDC{instrPS'SimDC = instrPS}
+{-# LINE 46 "..\habs-runtime\src\ABS\DC.abs" #-}
+data MainDeploymentComponent = MainDeploymentComponent{}
 
-init'SimDC :: Obj' SimDC -> I'.IO ()
-{-# LINE 26 "..\habs-runtime\src\ABS\DC.abs" #-}
-init'SimDC this@(Obj' this' _) = I'.pure ()
+smart'MainDeploymentComponent :: MainDeploymentComponent
+smart'MainDeploymentComponent = (MainDeploymentComponent)
 
-instance DC' SimDC where
-        load rtype periods this@(Obj' this' _) = do I'.lift (I'.pure 0)
-        total rtype this@(Obj' this' _) = do I'.lift (I'.pure 0)
-        request__ nrInstr this@(Obj' this' _)
+init'MainDeploymentComponent ::
+                             Obj' MainDeploymentComponent -> I'.IO ()
+{-# LINE 46 "..\habs-runtime\src\ABS\DC.abs" #-}
+init'MainDeploymentComponent this@(Obj' this' _ thisDC)
+  = I'.pure ()
+
+instance DeploymentComponent' MainDeploymentComponent where
+        load rtype periods this@(Obj' this' _ thisDC)
+          = do I'.lift (I'.pure 0)
+        total rtype this@(Obj' this' _ thisDC)
+          = do I'.lift (I'.pure (Fin 0))
+        transfer target amount rtype this@(Obj' this' _ thisDC)
+          = I'.pure ()
+        decrementResources amount rtype this@(Obj' this' _ thisDC)
+          = I'.pure ()
+        incrementResources amount rtype this@(Obj' this' _ thisDC)
+          = I'.pure ()
+        getName this@(Obj' this' _ thisDC) = do I'.lift (I'.pure "<main>")
+        getCreationTime this@(Obj' this' _ thisDC) = do I'.lift (now)
+        getStartupDuration this@(Obj' this' _ thisDC)
+          = do I'.lift (I'.pure 0)
+        getShutdownDuration this@(Obj' this' _ thisDC)
+          = do I'.lift (I'.pure 0)
+        getPaymentInterval this@(Obj' this' _ thisDC)
+          = do I'.lift (I'.pure 0)
+        getCostPerInterval this@(Obj' this' _ thisDC)
+          = do I'.lift (I'.pure 0)
+        getNumberOfCores this@(Obj' this' _ thisDC)
+          = do I'.lift (I'.pure 0)
+        acquire this@(Obj' this' _ thisDC) = do I'.lift (I'.pure True)
+        release this@(Obj' this' _ thisDC) = do I'.lift (I'.pure True)
+        shutdown this@(Obj' this' _ thisDC) = do I'.lift (I'.pure True)
+        request__ nrInstr this@(Obj' this' _ thisDC) = I'.pure ()
+
+{-# LINE 110 "..\habs-runtime\src\ABS\DC.abs" #-}
+data SimDeploymentComponent = SimDeploymentComponent{description'SimDeploymentComponent
+                                                     :: String,
+                                                     initconfig'SimDeploymentComponent ::
+                                                     Map Resourcetype Rat,
+                                                     instrPS'SimDeploymentComponent :: Int}
+
+smart'SimDeploymentComponent ::
+                             String -> Map Resourcetype Rat -> SimDeploymentComponent
+smart'SimDeploymentComponent description'this initconfig'this
+  = (\ instrPS'this ->
+       (SimDeploymentComponent description'this initconfig'this
+          (I'.fromIntegral instrPS'this)))
+      ((truncate (lookupDefault initconfig'this Speed 0)) :: Int)
+
+init'SimDeploymentComponent ::
+                            Obj' SimDeploymentComponent -> I'.IO ()
+{-# LINE 110 "..\habs-runtime\src\ABS\DC.abs" #-}
+init'SimDeploymentComponent this@(Obj' this' _ thisDC) = I'.pure ()
+
+instance DeploymentComponent' SimDeploymentComponent where
+        load rtype periods this@(Obj' this' _ thisDC)
+          = do I'.lift (I'.pure 0)
+        total rtype this@(Obj' this' _ thisDC)
+          = do I'.lift (I'.pure (Fin 0))
+        transfer target amount rtype this@(Obj' this' _ thisDC)
+          = I'.pure ()
+        decrementResources amount rtype this@(Obj' this' _ thisDC)
+          = I'.pure ()
+        incrementResources amount rtype this@(Obj' this' _ thisDC)
+          = I'.pure ()
+        getName this@(Obj' this' _ thisDC)
+          = do I'.lift
+                 ((\ this'' -> I'.pure (description'SimDeploymentComponent this''))
+                    =<< I'.readIORef this')
+        getCreationTime this@(Obj' this' _ thisDC) = do I'.lift (now)
+        getStartupDuration this@(Obj' this' _ thisDC)
+          = do I'.lift (I'.pure 0)
+        getShutdownDuration this@(Obj' this' _ thisDC)
+          = do I'.lift (I'.pure 0)
+        getPaymentInterval this@(Obj' this' _ thisDC)
+          = do I'.lift (I'.pure 0)
+        getCostPerInterval this@(Obj' this' _ thisDC)
+          = do I'.lift (I'.pure 0)
+        getNumberOfCores this@(Obj' this' _ thisDC)
+          = do I'.lift (I'.pure 0)
+        acquire this@(Obj' this' _ thisDC) = do I'.lift (I'.pure True)
+        release this@(Obj' this' _ thisDC) = do I'.lift (I'.pure True)
+        shutdown this@(Obj' this' _ thisDC) = do I'.lift (I'.pure True)
+        request__ nrInstr this@(Obj' this' _ thisDC)
           = do I'.lift (println (toString (I'.fromIntegral nrInstr)))
                (\ this'' ->
                   if
                     ((I'.fromIntegral nrInstr) >
-                       (I'.fromIntegral (instrPS'SimDC this'')))
+                       (I'.fromIntegral (instrPS'SimDeploymentComponent this'')))
                     then
                     do I'.lift (duration 1 1)
                        suspend this
@@ -90,7 +235,7 @@ instance DC' SimDC where
                           this <..>
                             request__
                               ((I'.fromIntegral nrInstr) -
-                                 (I'.fromIntegral (instrPS'SimDC this''))))
+                                 (I'.fromIntegral (instrPS'SimDeploymentComponent this''))))
                          =<< I'.lift (I'.readIORef this')
                     else
                     do remaining :: IORef' Rat <- I'.lift
@@ -98,7 +243,8 @@ instance DC' SimDC where
                                                         I'.newIORef
                                                           ((I'.fromIntegral nrInstr) /
                                                              (I'.fromIntegral
-                                                                (instrPS'SimDC this''))))
+                                                                (instrPS'SimDeploymentComponent
+                                                                   this''))))
                                                        =<< I'.readIORef this')
                        I'.lift
                          ((\ e1' -> duration e1' =<< I'.readIORef remaining) =<<
@@ -106,17 +252,22 @@ instance DC' SimDC where
                  =<< I'.lift (I'.readIORef this')
 main
   = main_is'
-      (\ this ->
-         do o :: IORef' DC <- I'.lift
-                                (((I'.newIORef . DC) =<< new init'SimDC (smart'SimDC 3)))
+      (\ this@(Obj' _ _ thisDC) ->
+         do o :: IORef' DeploymentComponent <- I'.lift
+                                                 (((I'.newIORef . DeploymentComponent) =<<
+                                                     new thisDC init'SimDeploymentComponent
+                                                       (smart'SimDeploymentComponent "mplo"
+                                                          (map [((Speed, 3))]))))
             f1 :: IORef' (Fut Unit) <- I'.lift
                                          (I'.newIORef =<<
-                                            ((\ (DC obj') -> (obj' <!> request__ 10)) =<<
-                                               I'.readIORef o))
+                                            ((\ (DeploymentComponent obj') ->
+                                                (obj' <!> request__ 10))
+                                               =<< I'.readIORef o))
             f2 :: IORef' (Fut Unit) <- I'.lift
                                          (I'.newIORef =<<
-                                            ((\ (DC obj') -> (obj' <!> request__ 19)) =<<
-                                               I'.readIORef o))
+                                            ((\ (DeploymentComponent obj') ->
+                                                (obj' <!> request__ 19))
+                                               =<< I'.readIORef o))
             awaitFutures' this
               [(I'.isEmptyMVar =<< I'.readIORef f1),
                (I'.isEmptyMVar =<< I'.readIORef f2)]
