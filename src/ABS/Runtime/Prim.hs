@@ -10,7 +10,7 @@ module ABS.Runtime.Prim
     , while, while'
     , (<$!>)
     -- * primitives for soft-realtime extension
-    , now, duration, awaitDuration'
+    , currentms, now, duration, awaitDuration'
     , random
     ) where
 
@@ -345,6 +345,11 @@ while' predAction loopAction = (`when` (loopAction >> while' predAction loopActi
 while :: IO Bool -> ABS' () -> ABS' ()
 while predAction loopAction = (`when` (loopAction >> while predAction loopAction)) =<< lift predAction -- else continue
  
+
+
+{-# INLINE currentms #-}
+currentms :: IO (Ratio Int)
+currentms = realToFrac <$> getPOSIXTime
 
 {-# INLINE now #-}
 now :: IO Time
