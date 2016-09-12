@@ -12,7 +12,6 @@ module ABS.Runtime.Prim
     -- * primitives for soft-realtime extension
     , now, duration, awaitDuration'
     , random
-    , smart'SimDC, init'SimDC
     ) where
 
 import ABS.Runtime.Base
@@ -64,7 +63,7 @@ forkIO__tg action = mask $ \restore -> do
 null :: Obj' Null'
 null = Obj' (unsafePerformIO $ newIORef undefined) -- its object contents
             (Cog (throw NullException) (throw NullException)) -- its COG
-            (DC null) -- circular ref
+            (DeploymentComponent null) -- circular ref
 {-# NOINLINE nullFuture' #-}
 nullFuture' :: Fut a
 nullFuture' = unsafePerformIO $ newEmptyMVar
@@ -280,7 +279,7 @@ awaitSugar' (Obj' _ thisCog@(Cog _ thisMailBox) _) lhs obj@(Obj' _ otherCog@(Cog
 
 {-# INLINABLE new #-}
 -- | new, unlifted
-new :: DC -> (Obj' a -> IO ()) -> a -> IO (Obj' a)
+new :: DeploymentComponent -> (Obj' a -> IO ()) -> a -> IO (Obj' a)
 new dc initFun objSmartCon = do
                 -- create the cog
                 newCogSleepTable <- newIORef []
@@ -387,14 +386,14 @@ main_is' mainABS' = do
       let dcCog = Cog dcCogSleepTable dcCogMailBox
 
       -- create the object
-      dcObj'Contents <- newIORef (smart'SimDC 0)
-      let dcObj' = Obj' dcObj'Contents dcCog (DC dcObj') -- circular ref
+      dcObj'Contents <- newIORef smart'MainDeploymentComponent
+      let dcObj' = Obj' dcObj'Contents dcCog (DeploymentComponent dcObj') -- circular ref
       
       -- create the main cog
       mb <- newTQueueIO
       st <- newIORef []
       evalContT $ do
-        (mainABS' $ Obj' (error "runtime error: the main ABS' block tried to call 'this'") (Cog st mb) (DC dcObj')) `catches` handlers'
+        (mainABS' $ Obj' (error "runtime error: the main ABS' block tried to call 'this'") (Cog st mb) (DeploymentComponent dcObj')) `catches` handlers'
 #ifdef WAIT_ALL_COGS
         back' (Cog st mb)
   t <- myThreadId
@@ -403,42 +402,38 @@ main_is' mainABS' = do
   --freeStablePtr s
 #endif
 
--- for simulating DC (extracted by code-generated src/ABS/DC.abs)
-
-data SimDC = SimDC{instrPS'SimDC :: Int}
-smart'SimDC :: Int -> SimDC
-smart'SimDC instrPS = SimDC{instrPS'SimDC = instrPS}
-
-init'SimDC :: Obj' SimDC -> IO ()
-init'SimDC this@(Obj' this' _ _) = pure ()
-
-instance DC' SimDC where
-        load rtype periods this@(Obj' this' _ _) = do lift (pure 0)
-        total rtype this@(Obj' this' _ _) = do lift (pure 0)
-        request__ nrInstr this@(Obj' this' _ _)
-          = do --lift (println (toString (fromIntegral nrInstr)))
-               (\ this'' ->
-                  if
-                    ((fromIntegral nrInstr) >
-                       (fromIntegral (instrPS'SimDC this'')))
-                    then
-                    do lift (duration 1 1)
-                       suspend this
-                       (\ this'' ->
-                          this <..>
-                            request__
-                              ((fromIntegral nrInstr) -
-                                 (fromIntegral (instrPS'SimDC this''))))
-                         =<< lift (readIORef this')
-                    else
-                    do remaining <- lift
-                                                    ((\ this'' ->
-                                                        newIORef
-                                                          ((fromIntegral nrInstr) /
-                                                             (fromIntegral
-                                                                (instrPS'SimDC this''))))
-                                                       =<< readIORef this')
-                       lift
-                         ((\ e1' -> duration e1' =<< readIORef remaining) =<<
-                            readIORef remaining))
-                 =<< lift (readIORef this')
+-- the main DC (not exported)
+data MainDeploymentComponent = MainDeploymentComponent{}
+smart'MainDeploymentComponent :: MainDeploymentComponent
+smart'MainDeploymentComponent = (MainDeploymentComponent)
+init'MainDeploymentComponent ::
+                             Obj' MainDeploymentComponent -> IO ()
+init'MainDeploymentComponent this@(Obj' this' _ thisDC)
+  = pure ()
+instance DeploymentComponent' MainDeploymentComponent where
+        load rtype periods this@(Obj' this' _ thisDC)
+          = do lift (pure 0)
+        total rtype this@(Obj' this' _ thisDC)
+          = do lift (pure (Fin 0))
+        transfer target amount rtype this@(Obj' this' _ thisDC)
+          = pure ()
+        decrementResources amount rtype this@(Obj' this' _ thisDC)
+          = pure ()
+        incrementResources amount rtype this@(Obj' this' _ thisDC)
+          = pure ()
+        getName this@(Obj' this' _ thisDC) = do lift (pure "<main>")
+        getCreationTime this@(Obj' this' _ thisDC) = do lift (now)
+        getStartupDuration this@(Obj' this' _ thisDC)
+          = do lift (pure 0)
+        getShutdownDuration this@(Obj' this' _ thisDC)
+          = do lift (pure 0)
+        getPaymentInterval this@(Obj' this' _ thisDC)
+          = do lift (pure 0)
+        getCostPerInterval this@(Obj' this' _ thisDC)
+          = do lift (pure 0)
+        getNumberOfCores this@(Obj' this' _ thisDC)
+          = do lift (pure 0)
+        acquire this@(Obj' this' _ thisDC) = do lift (pure True)
+        release this@(Obj' this' _ thisDC) = do lift (pure True)
+        shutdown this@(Obj' this' _ thisDC) = do lift (pure True)
+        request__ nrInstr this@(Obj' this' _ thisDC) = pure ()

@@ -1,6 +1,14 @@
 module ABS.DC;
 
+// import * from ABS.BaseDC;
+
+// module ABS.BaseDC;
+
 export *;
+
+// /type DC = DeploymentComponent;
+
+data InfRat = InfRat_ | Fin(Rat finvalue);
 
 data Resourcetype = Speed     // Execution speed in "cpu units" - used by [Cost: x] annotation
                   | Cores     // Number of cores (static declaration for deployment planning)
@@ -12,26 +20,152 @@ data Resourcetype = Speed     // Execution speed in "cpu units" - used by [Cost:
                   | CostPerInterval            // Cost per billing period, used by CloudProvider
                   ;
 
-interface DC {
-    // Return the load (0-100) for given resourcetype over the last n periods.
-    // If resource is infinite, return 0.
-    Rat load(Resourcetype rtype, Int periods);
-    // Return the total available amount for given resourcetype.
-    Rat total(Resourcetype rtype);
+interface DeploymentComponent {
+  [Atomic] Rat load(Resourcetype rtype, Int periods);
+  [Atomic] InfRat total(Resourcetype rtype);
+  Unit transfer(DeploymentComponent target, Rat amount, Resourcetype rtype);
+  Unit decrementResources(Rat amount, Resourcetype rtype);
+  Unit incrementResources(Rat amount, Resourcetype rtype);
+  [Atomic] String getName();
+  //[Atomic] CloudProvider getProvider();
+  [Atomic] Time getCreationTime();
+  [Atomic] Rat getStartupDuration();
+  [Atomic] Rat getShutdownDuration();
+  [Atomic] Int getPaymentInterval();
+  [Atomic] Rat getCostPerInterval();
+  [Atomic] Rat getNumberOfCores();
+  Bool acquire();
+  Bool release();
+  Bool shutdown();
 
-    // for sim purposes, hidden
-    Unit request__(Int nrInstr);
+  // for sim purposes, hidden
+  Unit request__(Int nrInstr);
 }
 
-class SimDC(Int instrPS) implements DC {
+
+class MainDeploymentComponent implements DeploymentComponent {
   // TODO
   Rat load(Resourcetype rtype, Int periods) { 
     return 0; 
   }
   // TODO
   Rat total(Resourcetype rtype) {
+    return Fin(0);
+  }
+
+  Unit transfer(DeploymentComponent target, Rat amount, Resourcetype rtype) {}
+
+  // TODO
+  Unit decrementResources(Rat amount, Resourcetype rtype) {}
+  // TODO
+  Unit incrementResources(Rat amount, Resourcetype rtype) {}
+  
+  String getName() {
+    return "<main>";
+  }
+
+  // CloudProvider getProvider();
+
+  // TODO
+   Time getCreationTime() {
+    return now(); // stub, TODO
+  }
+   Rat getStartupDuration() {
     return 0;
   }
+
+  // TODO
+   Rat getShutdownDuration() {
+    return 0;
+  }
+
+  // TODO
+   Int getPaymentInterval() {
+    return 0;
+  }
+
+  // TODO
+   Rat getCostPerInterval() {
+    return 0;
+  }
+
+  // TODO
+   Rat getNumberOfCores() {
+    return 0;
+  }
+  // TODO
+  Bool acquire() { return True; }
+  // TODO
+  Bool release() { return True; }
+  // TODO
+  Bool shutdown() { return True; }
+
+
+  // for sim purposes, hidden
+  Unit request__(Int nrInstr) {
+      // ignore for main dc
+  }
+}
+
+class SimDeploymentComponent(String description, Map<Resourcetype,Rat> initconfig) implements DeploymentComponent {
+  Int instrPS= truncate(lookupDefault(initconfig, Speed, 0));
+
+  // TODO
+  Rat load(Resourcetype rtype, Int periods) { 
+    return 0; 
+  }
+  // TODO
+  Rat total(Resourcetype rtype) {
+    return Fin(0);
+  }
+
+  Unit transfer(DeploymentComponent target, Rat amount, Resourcetype rtype) {}
+
+  // TODO
+  Unit decrementResources(Rat amount, Resourcetype rtype) {}
+  // TODO
+  Unit incrementResources(Rat amount, Resourcetype rtype) {}
+  
+  String getName() {
+    return description;
+  }
+
+  // CloudProvider getProvider();
+
+  // TODO
+   Time getCreationTime() {
+    return now(); // stub, TODO
+  }
+   Rat getStartupDuration() {
+    return 0;
+  }
+
+  // TODO
+   Rat getShutdownDuration() {
+    return 0;
+  }
+
+  // TODO
+   Int getPaymentInterval() {
+    return 0;
+  }
+
+  // TODO
+   Rat getCostPerInterval() {
+    return 0;
+  }
+
+  // TODO
+   Rat getNumberOfCores() {
+    return 0;
+  }
+  // TODO
+  Bool acquire() { return True; }
+  // TODO
+  Bool release() { return True; }
+  // TODO
+  Bool shutdown() { return True; }
+
   Unit request__(Int nrInstr) {
     println(toString(nrInstr));
     if (nrInstr > instrPS) {
@@ -46,8 +180,9 @@ class SimDC(Int instrPS) implements DC {
   }
 }
 
+
 {
-  DC o = new SimDC(3);
+  DeploymentComponent o = new SimDeploymentComponent("mplo", map[Pair(Speed,3)]);
   Fut<Unit> f1 =o!request__(10);
   Fut<Unit> f2 = o!request__(19);
   await f1? & f2?;

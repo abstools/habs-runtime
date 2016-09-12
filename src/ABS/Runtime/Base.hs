@@ -23,7 +23,7 @@ instance Show (MVar a) where
 -- 1) a reference to its cog
 -- 2) its attributes placed in a mutable variable=IORef
 -- NB: we deviate from ABS by not providing ordering of object-refs
-data Obj' contents = Obj' (IORef contents) !Cog DC
+data Obj' contents = Obj' (IORef contents) !Cog DeploymentComponent
 
 -- no need for Eq (Obj a). it is done by boilerplate generation of instance Eq I
 -- instance Eq I where
@@ -66,6 +66,13 @@ data Null'
 type Time = NominalDiffTime
 
 -- for simulating DC (extracted by code-generated src/ABS/DC.abs)
+type Unit = ()
+type Rat = Ratio Int
+
+data InfRat = InfRat | Fin !Rat
+  deriving (Eq, Show)
+
+finvalue (Fin a) = a
 
 data Resourcetype = Speed
                   | Cores
@@ -75,27 +82,57 @@ data Resourcetype = Speed
                   | Shutdownduration
                   | PaymentInterval
                   | CostPerInterval
-                  deriving (Eq, Show)
+                  deriving (Eq, Show, Ord)
 
-class DC' a where
-        load :: Resourcetype -> Int -> Obj' a -> ABS' (Ratio Int)
-        total :: Resourcetype -> Obj' a -> ABS' (Ratio Int)
-        request__ :: Int -> Obj' a -> ABS' ()
 
-data DC = forall a . DC' a => DC (Obj' a)
 
-instance Show DC where
-        show _ = "DC"
+class DeploymentComponent' a where
+        load :: Resourcetype -> Int -> Obj' a -> ABS' Rat
+        total :: Resourcetype -> Obj' a -> ABS' InfRat  
+        transfer :: DeploymentComponent -> Rat -> Resourcetype -> Obj' a -> ABS' Unit
+        decrementResources :: Rat -> Resourcetype -> Obj' a -> ABS' Unit
+        incrementResources :: Rat -> Resourcetype -> Obj' a -> ABS' Unit
+        getName :: Obj' a -> ABS' String
+        getCreationTime :: Obj' a -> ABS' Time
+        getStartupDuration :: Obj' a -> ABS' Rat
+        getShutdownDuration :: Obj' a -> ABS' Rat
+        getPaymentInterval :: Obj' a -> ABS' Int
+        getCostPerInterval :: Obj' a -> ABS' Rat
+        getNumberOfCores :: Obj' a -> ABS' Rat
+        acquire :: Obj' a -> ABS' Bool
+        release :: Obj' a -> ABS' Bool
+        shutdown :: Obj' a -> ABS' Bool
+        request__ :: Int -> Obj' a -> ABS' Unit
 
-instance Eq DC where
-        DC (Obj' ref1' _ _) == DC (Obj' ref2' _ _)
+data DeploymentComponent = forall a . DeploymentComponent' a => DeploymentComponent (Obj' a)
+
+instance Show DeploymentComponent where
+        show _ = "DeploymentComponent"
+
+instance Eq DeploymentComponent where
+        DeploymentComponent (Obj' ref1' _ _) ==
+          DeploymentComponent (Obj' ref2' _ _)
           = ref1' == unsafeCoerce ref2'
 
-instance DC' Null' where
+instance DeploymentComponent' Null' where
         load = undefined
         total = undefined
+        transfer = undefined
+        decrementResources = undefined
+        incrementResources = undefined
+        getName = undefined
+        getCreationTime = undefined
+        getStartupDuration = undefined
+        getShutdownDuration = undefined
+        getPaymentInterval = undefined
+        getCostPerInterval = undefined
+        getNumberOfCores = undefined
+        acquire = undefined
+        release = undefined
+        shutdown = undefined
         request__ = undefined
 
+instance DeploymentComponent' a => Sub' (Obj' a)
+         DeploymentComponent where
+        up' = DeploymentComponent
 
-instance DC' a => Sub' (Obj' a) DC where
-        up' = DC
