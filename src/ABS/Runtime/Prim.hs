@@ -5,7 +5,7 @@ module ABS.Runtime.Prim
     , awaitFutures'
     , awaitFutureField', ChangedFuture' (..)
     , new, newlocal'
-    , sync', (<..>), (<!>), (<!!>), awaitSugar'
+    , sync', (<..>), (<!>), (<!!>), awaitSugar', awaitSugar''
     , skip, main_is'
     , while, while'
     , (<$!>)
@@ -275,6 +275,19 @@ awaitSugar' (Obj' _ thisCog@(Cog _ thisMailBox) _) lhs obj@(Obj' _ otherCog@(Cog
     back' thisCog)
 
 
+{-# INLINABLE awaitSugar'' #-}
+-- | await guard sugar for tEffExp
+awaitSugar'' :: Obj' this 
+            -> Obj' a -- ^ callee
+            -> (Obj' a -> ABS' b) -- ^ method 
+            -> ABS' ()
+awaitSugar'' (Obj' _ thisCog@(Cog _ thisMailBox) _) obj@(Obj' _ otherCog@(Cog _ otherMailBox) _) methodPartiallyApplied = 
+  callCC (\ k -> do
+    lift $ atomically $ writeTQueue otherMailBox (do
+               _ <- methodPartiallyApplied obj `catches` handlers'
+               lift $ atomically $ writeTQueue thisMailBox (k ())
+               back' otherCog)
+    back' thisCog)
 
 
 {-# INLINABLE new #-}
