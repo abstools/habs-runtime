@@ -4,10 +4,12 @@ module ABS.Runtime.Base where
 
 import Control.Concurrent.MVar (MVar) -- futures
 import ABS.Runtime.TQueue (TQueue) -- mailbox
-import Data.IORef (IORef)
+import Data.IORef (IORef, newIORef)
 import Control.Monad.Trans.Cont (ContT)
 import Data.Time.Clock (NominalDiffTime) -- for realtime
-
+import Data.Dynamic (Dynamic)
+import System.IO.Unsafe (unsafePerformIO)
+import Data.Map (Map,empty)
 -- | a future reference is a write-once locking var
 --
 -- write-once is not imposed by Haskell, but
@@ -64,3 +66,5 @@ data Null'
 -- for realtime
 type Time = NominalDiffTime
 
+apiStore' :: IORef (Map String Dynamic)
+apiStore' = unsafePerformIO (newIORef empty)

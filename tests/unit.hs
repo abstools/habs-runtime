@@ -56,7 +56,7 @@ case_fifo = do
                                        return [f1,f2]
                                      )
                 mapM_ (\ f -> awaitFuture' this f) (concat fs) -- so that main does not exit too early
-                      )
+                      ) (pure ())
                                 
   (outStr, ()) <- hCapture [stderr] main
   let outLines = lines outStr
@@ -90,7 +90,7 @@ case_future_forwarding = do
                                        lift $ threadDelay 10
                                        println' (show res)
                                      )
-                      )
+                      ) (pure ())
                                 
   (outStr, ()) <- hCapture [stderr] main
   let outLines = lines outStr
@@ -130,7 +130,7 @@ case_await_boolean = do
                 f <- lift $ o1 <!> check
                 res <- lift $ get f
                 lift $ assertEqual "wrong last value" 0 res
-                      )
+                      ) (pure ())
 
   let main_local = withArgs [] $ main_is' (\ this -> do
                 o1 <- lift $ newlocal' this (const $ return ()) c'
@@ -145,7 +145,7 @@ case_await_boolean = do
                 awaitFuture' this f
                 res <- lift $ get f
                 lift $ assertEqual "wrong last value" 0 res
-                            )
+                            ) (pure ())
 
   (outStr, ()) <- hCapture [stderr] main
   let outLines = lines outStr
