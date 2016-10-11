@@ -66,5 +66,6 @@ data Null'
 -- for realtime
 type Time = NominalDiffTime
 
+{-# NOINLINE apiStore' #-}
 apiStore' :: IORef (Map String Dynamic)
 apiStore' = unsafePerformIO (newIORef empty)
