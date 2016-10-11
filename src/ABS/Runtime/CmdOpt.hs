@@ -11,13 +11,13 @@ cmdOpt = unsafePerformIO (cmdArgs cmdOptSpec)
 
 data CmdOpt = CmdOpt {
     trace_exceptions :: Bool -- ^ The COGs hide any uncaught exceptions by default. This option logs to the stdout an uncaught exception. Used for debugging
-  , http_port :: Int
+  , port :: Int
                      } deriving (Data, Typeable)
 
 cmdOptSpec :: CmdOpt
 cmdOptSpec = CmdOpt { 
     trace_exceptions = def &= help "The COGs hide any uncaught exceptions by default. This option logs to the stdout an uncaught exception. Used for debugging"
-  , http_port = 8080 &=name "p" &= typ "NUM" &= help "The port that the REST HTTP server listens on. Defaults to 8080"
+  , port = 8080 &= typ "NUM" &= help "The port that the REST HTTP server listens on. Defaults to 8080"
              }
              &= program "habs-runtime" 
              &= help "The ABS-Haskell runtime" 
