@@ -393,7 +393,7 @@ main_is' :: (Obj' contents -> ABS' ()) -> ScottyM () -> IO ()
 main_is' mainABS' restAPI' = do
  hSetBuffering stdout LineBuffering -- needed by EasyInterface's streaming. Default in linux-like is BlockBuffering
  hSetBuffering stderr LineBuffering -- needed by golden tests. Default in linux-like is NoBuffering
- forkIO $ scotty (http_port cmdOpt) restAPI'
+ forkIO $ scotty (port cmdOpt) restAPI'
  runInUnboundThread $ do
 #ifdef WAIT_ALL_COGS
   _ <- forkIO__tg $ do
