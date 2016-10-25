@@ -50,6 +50,9 @@ library
     time,
     -- for implementing the random eff-exp
     random,
+    -- for the REST HTTP API
+    containers,
+    scotty,
     cmdargs
   exposed-modules:
     -- name-clash-avoiding wrapper module used by the codegen 

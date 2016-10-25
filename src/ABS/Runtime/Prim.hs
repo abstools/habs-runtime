@@ -37,6 +37,7 @@ import Data.Ratio (Ratio)
 import Data.Typeable
 import Data.List (delete)
 import System.Random (randomRIO)
+import Web.Scotty (ScottyM,scotty)
 
 #ifdef WAIT_ALL_COGS
 import Control.Exception (SomeException,try,mask)
@@ -388,10 +389,11 @@ random i = randomRIO (0, case compare i 0 of
 -- Note the mainABS' function expects a this object as input. This is only for unifying the method-block generation;
 -- the code-generator will safely catch if a main contains calls to this. This runtime, however, does not do such checks;
 -- if the user passes a main that uses this, the program will err.
-main_is' :: (Obj' contents -> ABS' ()) -> IO ()
-main_is' mainABS' = do
+main_is' :: (Obj' contents -> ABS' ()) -> ScottyM () -> IO ()
+main_is' mainABS' restAPI' = do
  hSetBuffering stdout LineBuffering -- needed by EasyInterface's streaming. Default in linux-like is BlockBuffering
  hSetBuffering stderr LineBuffering -- needed by golden tests. Default in linux-like is NoBuffering
+ forkIO $ scotty (port cmdOpt) restAPI'
  runInUnboundThread $ do
 #ifdef WAIT_ALL_COGS
   _ <- forkIO__tg $ do
