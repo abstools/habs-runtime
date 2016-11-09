@@ -49,7 +49,7 @@ main7 n m j = withArgs [] $ main_is' (\ this -> do
                                                                 obj <!> method7 j attr)
                                                )
                           mapM_ (\ f -> awaitFuture' this f) (concat fs)
-                       )
+                       ) (pure ())
 
 
 method1 :: Int -> IORef Int -> MVar () -> ABS' ()

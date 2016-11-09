@@ -10,7 +10,7 @@ module ABS.Runtime.Prim
     , while, while'
     , (<$!>)
     -- * primitives for soft-realtime extension
-    , currentms, now, duration, awaitDuration'
+    , currentms, now, duration, timeDifference, timeValue, awaitDuration'
     , random
     ) where
 
@@ -368,6 +368,12 @@ currentms = realToFrac <$> getPOSIXTime
 {-# INLINE now #-}
 now :: IO Time
 now = getPOSIXTime
+
+timeDifference :: Time -> Time -> Ratio Int
+timeDifference x y = realToFrac $ x - y
+
+timeValue :: Time -> Ratio Int
+timeValue = realToFrac
 
 {-# INLINE duration #-}
 -- | in seconds, ignores second argument tmax
