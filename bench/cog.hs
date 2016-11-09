@@ -41,9 +41,9 @@ method7 j attr this = do
     
 data C = C
 
-main7 n m j = withArgs [] $ main_is' (\ this -> do
+main7 n m j = withArgs [] $ main_is' (\ this@(Obj' _ _ thisDC) -> do
                           fs <-replicateM n (lift $ do
-                                                 obj <- new (const $ return ()) C
+                                                 obj <- new thisDC (const $ return ()) C
                                                  replicateM m (do
                                                                 attr <- newIORef 0
                                                                 obj <!> method7 j attr)
