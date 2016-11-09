@@ -17,6 +17,8 @@ cabal.config
 *_flymake.abs
 *_flymake.hs
 TAGS
+tags
+.tags
 
 # OS
 *~
