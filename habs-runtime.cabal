@@ -47,7 +47,7 @@ library
     -- for lifting exceptions to ABS monad and so to implement the exceptions extension for ABS
     exceptions,
     -- for soft-realtime extension
-    time,
+    clock,
     -- for implementing the random eff-exp
     random,
     -- for the REST HTTP API
