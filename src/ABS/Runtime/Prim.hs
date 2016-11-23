@@ -30,7 +30,7 @@ import Prelude hiding (null)
 import Control.Monad ((<$!>), when, unless, join)
 import Control.Exception (Exception, throw, evaluate)
 import Control.Monad.Catch (catch, catches, Handler (..))
-import Data.Time.Clock.POSIX (getPOSIXTime) -- for realtime
+import System.Clock (getTime, Clock (Monotonic), diffTimeSpec, toNanoSecs) -- for realtime
 import qualified System.Exit (exitFailure)
 import System.IO (hSetBuffering, BufferMode (LineBuffering), hPutStrLn, hPrint, stderr, stdout)
 import Data.Ratio (Ratio)
@@ -54,6 +54,10 @@ forkIO__tg action = mask $ \restore -> do
     forkIO $ 
       try (restore action) >>= \ (_ :: Either SomeException a) -> atomically (modifyTVar' __tg (subtract 1))
 #endif
+
+{-# NOINLINE __startClock #-}
+__startClock :: Time
+__startClock = unsafePerformIO $ getTime Monotonic
 
 -- this is fine but whenever it is used
 -- we do (unsafeCoerce null :: MVar a) == d
@@ -363,17 +367,17 @@ while predAction loopAction = (`when` (loopAction >> while predAction loopAction
 
 {-# INLINE currentms #-}
 currentms :: IO (Ratio Int)
-currentms = realToFrac <$> getPOSIXTime
+currentms = (/ 1000000) . fromIntegral . toNanoSecs <$> getTime Monotonic
 
 {-# INLINE now #-}
 now :: IO Time
-now = getPOSIXTime
+now = subtract __startClock <$> getTime Monotonic
 
 timeDifference :: Time -> Time -> Ratio Int
-timeDifference x y = realToFrac $ x - y
+timeDifference x y = (/ 1000000) . fromIntegral . toNanoSecs $ diffTimeSpec x y
 
 timeValue :: Time -> Ratio Int
-timeValue = realToFrac
+timeValue = (/ 1000000) . fromIntegral . toNanoSecs
 
 {-# INLINE duration #-}
 -- | in seconds, ignores second argument tmax
@@ -397,6 +401,7 @@ random i = randomRIO (0, case compare i 0 of
 -- if the user passes a main that uses this, the program will err.
 main_is' :: (Obj' contents -> ABS' ()) -> ScottyM () -> IO ()
 main_is' mainABS' restAPI' = do
+ _ <- evaluate __startClock -- force to compute the start clock of the program
  hSetBuffering stdout LineBuffering -- needed by EasyInterface's streaming. Default in linux-like is BlockBuffering
  hSetBuffering stderr LineBuffering -- needed by golden tests. Default in linux-like is NoBuffering
  case port cmdOpt of

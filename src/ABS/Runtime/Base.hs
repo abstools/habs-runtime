@@ -6,7 +6,7 @@ import Control.Concurrent.MVar (MVar) -- futures
 import ABS.Runtime.TQueue (TQueue) -- mailbox
 import Data.IORef (IORef, newIORef)
 import Control.Monad.Trans.Cont (ContT)
-import Data.Time.Clock (NominalDiffTime) -- for realtime
+import System.Clock (TimeSpec) -- for realtime
 import Data.Ratio (Ratio)
 import Unsafe.Coerce (unsafeCoerce)
 import Data.Dynamic (Dynamic)
@@ -66,7 +66,7 @@ type IORef' = IORef
 data Null'
 
 -- for realtime
-type Time = NominalDiffTime
+type Time = TimeSpec
 
 -- for simulating DC (extracted by code-generated src/ABS/DC.abs)
 type Unit = ()
