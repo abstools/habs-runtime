@@ -223,7 +223,11 @@ awaitDuration' :: Obj' this -> Ratio Int -> Ratio Int -> ABS' ()
 awaitDuration' (Obj' _ thisCog@(Cog _ thisMailBox)) tmin _tmax = 
   callCC (\ k -> do
                   _ <- lift $ forkIO (do
-                                    threadDelay $ truncate $ tmin * 1000000 -- seconds to microseconds
+                                    threadDelay $ truncate $ tmin * fromIntegral (fst (unit_time cmdOpt) *
+                                      case snd $ unit_time cmdOpt of
+                                        S -> 1000000
+                                        Ms -> 1000
+                                        Us -> 1)                        
                                     atomically $ writeTQueue thisMailBox (k ()))
                   back' thisCog)
 
@@ -382,7 +386,11 @@ timeValue = (/ 1000000) . fromIntegral . toNanoSecs
 {-# INLINE duration #-}
 -- | in seconds, ignores second argument tmax
 duration :: Ratio Int -> Ratio Int -> IO ()
-duration tmin _tmax = threadDelay $ truncate $ tmin * 1000000
+duration tmin _tmax = threadDelay $ truncate $ tmin * fromIntegral (fst (unit_time cmdOpt) *
+  case snd $ unit_time cmdOpt of
+    S -> 1000000
+    Ms -> 1000
+    Us -> 1)
 
 
 {-# INLINE random #-}
