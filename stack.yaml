@@ -5,7 +5,7 @@ extra-deps:
   - unagi-chan-0.4.0.0
 flags:
   habs-runtime:
-    wait-all-cogs: true
+    wait-all-cogs: false # disabled for tests
 extra-package-dbs: []
 
 # will use system-wide installed GHC (e.g. HaskellPlatform)

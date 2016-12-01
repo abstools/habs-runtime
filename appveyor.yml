@@ -24,3 +24,4 @@ test_script:
 - stack setup > nul
 - echo "" | stack --no-terminal build
 - echo "" | stack --no-terminal test
+- echo "" | stack --no-terminal bench

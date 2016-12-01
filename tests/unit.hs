@@ -20,7 +20,7 @@ main = do
   withArgs ("-j1":args) $ -- don't run tests in parallel because it messes output
        hSetBuffering stderr LineBuffering >>
        defaultMainWithIngredients (htmlRunner:defaultIngredients)(
-         localOption (mkTimeout 1000000) $ -- timeouts any test at 1s
+         localOption (mkTimeout 10000000) $ -- timeouts any test at 10s
          testGroup "coop-scheduling"
                      [ testCase "case_fifo" case_fifo
                      , testCase "case_future_forwarding" case_future_forwarding
