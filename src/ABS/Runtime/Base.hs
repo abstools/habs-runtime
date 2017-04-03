@@ -12,6 +12,7 @@ import Unsafe.Coerce (unsafeCoerce)
 import Data.Dynamic (Dynamic)
 import System.IO.Unsafe (unsafePerformIO)
 import Data.Map (Map,empty)
+import qualified Data.Ratio (Ratio)
 -- | a future reference is a write-once locking var
 --
 -- write-once is not imposed by Haskell, but
@@ -59,6 +60,9 @@ class Sub' sub sup where
 -- self instance
 instance Sub' a a where
     up' x = x
+
+instance Sub' Int (Data.Ratio.Ratio Int) where
+  up' = fromIntegral
 
 -- local variables in the statement are mutable references
 type IORef' = IORef
