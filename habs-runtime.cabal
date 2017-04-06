@@ -56,7 +56,10 @@ library
     cmdargs
   exposed-modules:
     -- name-clash-avoiding wrapper module used by the codegen 
-    ABS.Runtime
+    ABS.Runtime,
+    -- the ABS standard library and the DC extesion to the standard library
+    ABS.StdLib,
+    ABS.DC
   other-modules:
     -- data structures used by the Runtime
     ABS.Runtime.Base,

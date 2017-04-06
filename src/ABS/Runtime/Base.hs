@@ -6,7 +6,6 @@ import Control.Concurrent.MVar (MVar) -- futures
 import ABS.Runtime.TQueue (TQueue) -- mailbox
 import Data.IORef (IORef, newIORef)
 import Control.Monad.Trans.Cont (ContT)
-import System.Clock (TimeSpec) -- for realtime
 import Data.Dynamic (Dynamic)
 import System.IO.Unsafe (unsafePerformIO)
 import Data.Map (Map,empty)
@@ -68,7 +67,6 @@ type IORef' = IORef
 data Null'
 
 -- for realtime
-type Time = TimeSpec
 
 {-# NOINLINE apiStore' #-}
 apiStore' :: IORef (Map String Dynamic)
