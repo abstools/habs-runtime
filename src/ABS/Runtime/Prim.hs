@@ -10,8 +10,16 @@ module ABS.Runtime.Prim
     , while, while'
     , (<$!>)
     -- * primitives for soft-realtime extension
-    , currentms, now, duration, timeDifference, timeValue, awaitDuration'
-    , random
+    , currentms, now, duration, awaitDuration'
+    , random,
+     -- * Lifting ABS pure code to ABS object layer
+
+     -- | Haskell is pure by default. These are necessary functions for lifting pure ABS expressions (of the functional core) to the ABS' object layer (monadic statements).
+
+     -- ** Haskell's return 
+
+     -- | is an expression taking a pure value and lifting it to the monadic world.
+     return
     ) where
 
 import ABS.Runtime.Base
@@ -30,7 +38,7 @@ import Prelude hiding (null)
 import Control.Monad ((<$!>), when, unless, join)
 import Control.Exception (Exception, throw, evaluate)
 import Control.Monad.Catch (catch, catches, Handler (..))
-import System.Clock (getTime, Clock (Monotonic), diffTimeSpec, toNanoSecs) -- for realtime
+import System.Clock (TimeSpec, getTime, Clock (Monotonic), toNanoSecs) -- for realtime
 import qualified System.Exit (exitFailure)
 import System.IO (hSetBuffering, BufferMode (LineBuffering), hPutStrLn, hPrint, stderr, stdout)
 import Data.Ratio (Ratio)
@@ -56,7 +64,7 @@ forkIO__tg action = mask $ \restore -> do
 #endif
 
 {-# NOINLINE __startClock #-}
-__startClock :: Time
+__startClock :: TimeSpec
 __startClock = unsafePerformIO $ getTime Monotonic
 
 -- this is fine but whenever it is used
@@ -374,14 +382,8 @@ currentms :: IO (Ratio Int)
 currentms = (/ 1000000) . fromIntegral . toNanoSecs <$> getTime Monotonic
 
 {-# INLINE now #-}
-now :: IO Time
+now :: IO TimeSpec
 now = subtract __startClock <$> getTime Monotonic
-
-timeDifference :: Time -> Time -> Ratio Int
-timeDifference x y = (/ 1000000) . fromIntegral . toNanoSecs $ diffTimeSpec x y
-
-timeValue :: Time -> Ratio Int
-timeValue = (/ 1000000) . fromIntegral . toNanoSecs
 
 {-# INLINE duration #-}
 -- | in seconds, ignores second argument tmax
@@ -477,4 +479,4 @@ instance DeploymentComponent' MainDeploymentComponent where
         acquire this@(Obj' this' _ thisDC) = do lift (pure True)
         release this@(Obj' this' _ thisDC) = do lift (pure True)
         shutdown this@(Obj' this' _ thisDC) = do lift (pure True)
-        request__ nrInstr this@(Obj' this' _ thisDC) = pure ()
+        request' nrInstr this@(Obj' this' _ thisDC) = pure ()

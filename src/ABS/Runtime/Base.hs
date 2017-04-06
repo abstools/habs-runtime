@@ -8,11 +8,14 @@ import Data.IORef (IORef, newIORef)
 import Control.Monad.Trans.Cont (ContT)
 import System.Clock (TimeSpec) -- for realtime
 import Data.Ratio (Ratio)
-import Unsafe.Coerce (unsafeCoerce)
 import Data.Dynamic (Dynamic)
 import System.IO.Unsafe (unsafePerformIO)
 import Data.Map (Map,empty)
 import qualified Data.Ratio (Ratio)
+-- needed because of inclusion of generated code
+import Prelude  as I' (fromIntegral, Bool, Int, String, IO, Eq (..),Ord(..), Show(..), undefined, error)
+import qualified Unsafe.Coerce as I' (unsafeCoerce)
+
 -- | a future reference is a write-once locking var
 --
 -- write-once is not imposed by Haskell, but
@@ -69,17 +72,25 @@ type IORef' = IORef
 
 data Null'
 
--- for realtime
+-- realtime
 type Time = TimeSpec
 
--- for simulating DC (extracted by code-generated src/ABS/DC.abs)
+{-# NOINLINE apiStore' #-}
+apiStore' :: IORef (Map String Dynamic)
+apiStore' = unsafePerformIO (newIORef empty)
+
+-- for simulating DC (extracted by code-generated src/ABS/DCInterface.abs)
 type Unit = ()
-type Rat = Ratio Int
+type Rat = Data.Ratio.Ratio Int
 
-data InfRat = InfRat | Fin !Rat
-  deriving (Eq, Show)
 
+-------------- GEN
+data InfRat = InfRat_
+            | Fin !Rat
+            deriving (I'.Eq, I'.Ord, I'.Show)
 finvalue (Fin a) = a
+finvalue _ = I'.error "Data constructor does not have accessor finvalue"
+
 
 data Resourcetype = Speed
                   | Cores
@@ -89,60 +100,87 @@ data Resourcetype = Speed
                   | Shutdownduration
                   | PaymentInterval
                   | CostPerInterval
-                  deriving (Eq, Show, Ord)
-
+                  deriving (I'.Eq, I'.Ord, I'.Show)
 
 
 class DeploymentComponent' a where
+        
         load :: Resourcetype -> Int -> Obj' a -> ABS' Rat
-        total :: Resourcetype -> Obj' a -> ABS' InfRat  
-        transfer :: DeploymentComponent -> Rat -> Resourcetype -> Obj' a -> ABS' Unit
+        
+        
+        total :: Resourcetype -> Obj' a -> ABS' InfRat
+        
+        
+        transfer ::
+                 DeploymentComponent -> Rat -> Resourcetype -> Obj' a -> ABS' Unit
+        
+        
         decrementResources :: Rat -> Resourcetype -> Obj' a -> ABS' Unit
+        
+        
         incrementResources :: Rat -> Resourcetype -> Obj' a -> ABS' Unit
+        
+        
         getName :: Obj' a -> ABS' String
+        
+        
         getCreationTime :: Obj' a -> ABS' Time
+        
+        
         getStartupDuration :: Obj' a -> ABS' Rat
+        
+        
         getShutdownDuration :: Obj' a -> ABS' Rat
+        
+        
         getPaymentInterval :: Obj' a -> ABS' Int
+        
+        
         getCostPerInterval :: Obj' a -> ABS' Rat
+        
+        
         getNumberOfCores :: Obj' a -> ABS' Rat
+        
+        
         acquire :: Obj' a -> ABS' Bool
+        
+        
         release :: Obj' a -> ABS' Bool
+        
+        
         shutdown :: Obj' a -> ABS' Bool
-        request__ :: Int -> Obj' a -> ABS' Unit
 
-data DeploymentComponent = forall a . DeploymentComponent' a => DeploymentComponent (Obj' a)
+        
+        request' :: Int -> Obj' a -> ABS' Unit
 
-instance Show DeploymentComponent where
+
+data DeploymentComponent = forall a . DeploymentComponent' a =>
+                             DeploymentComponent (Obj' a)
+
+instance I'.Show DeploymentComponent where
         show _ = "DeploymentComponent"
 
-instance Eq DeploymentComponent where
+instance I'.Eq DeploymentComponent where
         DeploymentComponent (Obj' ref1' _ _) ==
-          DeploymentComponent (Obj' ref2' _ _)
-          = ref1' == unsafeCoerce ref2'
+          DeploymentComponent (Obj' ref2' _ _) = ref1' == I'.unsafeCoerce ref2'
 
 instance DeploymentComponent' Null' where
-        load = undefined
-        total = undefined
-        transfer = undefined
-        decrementResources = undefined
-        incrementResources = undefined
-        getName = undefined
-        getCreationTime = undefined
-        getStartupDuration = undefined
-        getShutdownDuration = undefined
-        getPaymentInterval = undefined
-        getCostPerInterval = undefined
-        getNumberOfCores = undefined
-        acquire = undefined
-        release = undefined
-        shutdown = undefined
-        request__ = undefined
+        load = I'.undefined
+        total = I'.undefined
+        transfer = I'.undefined
+        decrementResources = I'.undefined
+        incrementResources = I'.undefined
+        getName = I'.undefined
+        getCreationTime = I'.undefined
+        getStartupDuration = I'.undefined
+        getShutdownDuration = I'.undefined
+        getPaymentInterval = I'.undefined
+        getCostPerInterval = I'.undefined
+        getNumberOfCores = I'.undefined
+        acquire = I'.undefined
+        release = I'.undefined
+        shutdown = I'.undefined
+        request' = I'.undefined
 
-instance DeploymentComponent' a => Sub' (Obj' a)
-         DeploymentComponent where
-        up' = DeploymentComponent
-
-{-# NOINLINE apiStore' #-}
-apiStore' :: IORef (Map String Dynamic)
-apiStore' = unsafePerformIO (newIORef empty)
+instance DeploymentComponent' a => Sub' (Obj' a) DeploymentComponent where 
+            up' = DeploymentComponent

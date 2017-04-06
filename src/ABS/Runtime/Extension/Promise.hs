@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveDataTypeable #-}
 module ABS.Runtime.Extension.Promise 
   ( pro_new
   , pro_try
@@ -28,7 +29,7 @@ pro_give fut = (>>= (`unless` throw PromiseRewriteException)) . tryPutMVar fut
 
 
 -- | Trying to write to an already-resolved promise
-data PromiseRewriteException = PromiseRewriteException deriving Show
+data PromiseRewriteException = PromiseRewriteException deriving (Show, Typeable)
 instance Control.Exception.Exception PromiseRewriteException where
   toException = absExceptionToException'
   fromException = absExceptionFromException'

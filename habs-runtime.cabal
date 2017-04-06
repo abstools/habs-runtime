@@ -50,13 +50,21 @@ library
     clock,
     -- for implementing the random eff-exp
     random,
+    -- for StdLib and non-StdLib coercive subtyping by generalized fmap
+    genifunctors>=0.4,
     -- for the REST HTTP API
+    text,
+    aeson,
+    unordered-containers,
     containers,
     scotty,
     cmdargs
   exposed-modules:
     -- name-clash-avoiding wrapper module used by the codegen 
-    ABS.Runtime
+    ABS.Runtime,
+    -- the ABS standard library and the DC extesion to the standard library
+    ABS.StdLib,
+    ABS.DC
   other-modules:
     -- data structures used by the Runtime
     ABS.Runtime.Base,
