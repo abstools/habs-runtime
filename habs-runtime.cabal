@@ -50,6 +50,8 @@ library
     clock,
     -- for implementing the random eff-exp
     random,
+    -- for StdLib and non-StdLib coercive subtyping by generalized fmap
+    genifunctors>=0.4,
     -- for the REST HTTP API
     containers,
     scotty,
