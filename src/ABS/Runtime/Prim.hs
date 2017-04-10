@@ -478,5 +478,5 @@ instance DeploymentComponent' MainDeploymentComponent where
           = do lift (pure 0)
         acquire this@(Obj' this' _ thisDC) = do lift (pure True)
         release this@(Obj' this' _ thisDC) = do lift (pure True)
-        shutdown this@(Obj' this' _ thisDC) = do lift (pure True)
+        shutdown_ this@(Obj' this' _ thisDC) = do lift (pure True)
         request' nrInstr this@(Obj' this' _ thisDC) = pure ()

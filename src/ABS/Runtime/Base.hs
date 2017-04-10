@@ -148,7 +148,7 @@ class DeploymentComponent' a where
         release :: Obj' a -> ABS' Bool
         
         
-        shutdown :: Obj' a -> ABS' Bool
+        shutdown_ :: Obj' a -> ABS' Bool
 
         
         request' :: Int -> Obj' a -> ABS' Unit
@@ -179,7 +179,7 @@ instance DeploymentComponent' Null' where
         getNumberOfCores = I'.undefined
         acquire = I'.undefined
         release = I'.undefined
-        shutdown = I'.undefined
+        shutdown_ = I'.undefined
         request' = I'.undefined
 
 instance DeploymentComponent' a => Sub' (Obj' a) DeploymentComponent where 

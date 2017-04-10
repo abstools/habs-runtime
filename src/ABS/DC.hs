@@ -13,7 +13,6 @@ module ABS.DC
        where
 
 import ABS.Runtime.Base (DeploymentComponent(..), DeploymentComponent'(..), Resourcetype(..), InfRat(..), finvalue)
-
 import ABS.StdLib
 import ABS.Runtime
 import Data.Function ((.))
@@ -95,7 +94,7 @@ instance DeploymentComponent' SimDeploymentComponent where
           = do I'.lift (I'.pure 0)
         acquire this@(Obj' this' _ thisDC) = do I'.lift (I'.pure (True))
         release this@(Obj' this' _ thisDC) = do I'.lift (I'.pure (True))
-        shutdown this@(Obj' this' _ thisDC) = do I'.lift (I'.pure (True))
+        shutdown_ this@(Obj' this' _ thisDC) = do I'.lift (I'.pure (True))
         request' nrInstr this@(Obj' this' _ thisDC)
           = do input :: IORef' Int <- I'.lift (I'.newIORef nrInstr)
                while
@@ -123,7 +122,6 @@ instance DeploymentComponent' SimDeploymentComponent where
                     I'.readIORef remaining)
                I'.pure ()
 
-
 class CloudProvider' a where
         
         prelaunchInstance ::
@@ -134,10 +132,19 @@ class CloudProvider' a where
                        Map Resourcetype Rat -> Obj' a -> ABS' DeploymentComponent
         
         
-        acquireInstance_ :: DeploymentComponent -> Obj' a -> ABS' Bool
+        acquireInstance :: DeploymentComponent -> Obj' a -> ABS' Bool
+        
+        
+        releaseInstance :: DeploymentComponent -> Obj' a -> ABS' Bool
         
         
         shutdownInstance :: DeploymentComponent -> Obj' a -> ABS' Bool
+        
+        
+        getAccumulatedCost :: Obj' a -> ABS' Rat
+        
+        
+        shutdown :: Obj' a -> ABS' Unit
         
         
         setInstanceDescriptions ::
@@ -174,8 +181,11 @@ instance I'.Eq CloudProvider where
 instance CloudProvider' Null' where
         prelaunchInstance = I'.undefined
         launchInstance = I'.undefined
-        acquireInstance_ = I'.undefined
+        acquireInstance = I'.undefined
+        releaseInstance = I'.undefined
         shutdownInstance = I'.undefined
+        getAccumulatedCost = I'.undefined
+        shutdown = I'.undefined
         setInstanceDescriptions = I'.undefined
         addInstanceDescription = I'.undefined
         removeInstanceDescription = I'.undefined
@@ -187,8 +197,10 @@ instance CloudProvider' a => Sub' (Obj' a) CloudProvider where
         up' = CloudProvider
 
 
-data SimCloudProvider = SimCloudProvider{acquiredInstances'SimCloudProvider
-                                         :: List DeploymentComponent,
+data SimCloudProvider = SimCloudProvider{accumulatedCost'SimCloudProvider
+                                         :: Rat,
+                                         acquiredInstances'SimCloudProvider ::
+                                         List DeploymentComponent,
                                          instanceDescriptions'SimCloudProvider ::
                                          Map String (Map Resourcetype Rat),
                                          keeprunning'SimCloudProvider :: Bool,
@@ -206,14 +218,17 @@ smart'SimCloudProvider name'this
           (\ acquiredInstances'this ->
              (\ killedInstances'this ->
                 (\ nextInstanceId'this ->
-                   (\ keeprunning'this ->
-                      (SimCloudProvider acquiredInstances'this instanceDescriptions'this
-                         keeprunning'this
-                         killedInstances'this
-                         launchedInstances'this
-                         name'this
-                         nextInstanceId'this))
-                     ((True)))
+                   (\ accumulatedCost'this ->
+                      (\ keeprunning'this ->
+                         (SimCloudProvider accumulatedCost'this acquiredInstances'this
+                            instanceDescriptions'this
+                            keeprunning'this
+                            killedInstances'this
+                            launchedInstances'this
+                            name'this
+                            nextInstanceId'this))
+                        ((True)))
+                     (0))
                   (0))
                ((list [])))
             ((list [])))
@@ -261,13 +276,25 @@ instance CloudProvider' SimCloudProvider where
                              I'.pure (acquiredInstances'SimCloudProvider this'')))
                        =<< I'.readIORef this'))
                I'.lift (I'.readIORef result)
-        acquireInstance_ instance_ this@(Obj' this' _ thisDC)
+        acquireInstance instance_ this@(Obj' this' _ thisDC)
           = do result :: IORef' Bool <- I'.lift (I'.newIORef (True))
                I'.lift (I'.pure (False))
+        releaseInstance instance_ this@(Obj' this' _ thisDC)
+          = do I'.lift (I'.pure (True))
         shutdownInstance instance_ this@(Obj' this' _ thisDC)
           = do _ <- I'.lift
-                      ((\ (DeploymentComponent obj') -> (obj' <!!> shutdown)) instance_)
+                      ((\ (DeploymentComponent obj') -> (obj' <!!> shutdown_)) instance_)
                I'.lift (I'.pure (True))
+        getAccumulatedCost this@(Obj' this' _ thisDC)
+          = do I'.lift
+                 ((\ this'' -> I'.pure (accumulatedCost'SimCloudProvider this''))
+                    =<< I'.readIORef this')
+        shutdown this@(Obj' this' _ thisDC)
+          = do I'.lift
+                 (I'.writeIORef this' =<<
+                    ((\ this'' -> this''{keeprunning'SimCloudProvider = (False)}) <$!>
+                       I'.readIORef this'))
+               I'.pure ()
         setInstanceDescriptions instanceDescriptions
           this@(Obj' this' _ thisDC)
           = do I'.lift

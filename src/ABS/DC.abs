@@ -63,7 +63,7 @@ class SimDeploymentComponent(String description, Map<Resourcetype,Rat> initconfi
   // TODO
   Bool release() { return True; }
   // TODO
-  Bool shutdown() { return True; }
+  Bool shutdown_() { return True; }
 
   Unit request__(Int nrInstr) {
     Int input = nrInstr;
@@ -90,12 +90,12 @@ interface CloudProvider {
     DeploymentComponent launchInstance(Map<Resourcetype, Rat> description);
     // acquireInstance, releaseInstance are called from deployment components.
     // launchInstance does the equivalent of acquireInstance.
-    Bool acquireInstance_(DeploymentComponent instance_);
-    //Bool releaseInstance(DeploymentComponent instance_);
+    Bool acquireInstance(DeploymentComponent instance_);
+    Bool releaseInstance(DeploymentComponent instance_);
     Bool shutdownInstance(DeploymentComponent instance_);
 
-    // Rat getAccumulatedCost();
-    //Unit shutdown();
+    Rat getAccumulatedCost();
+    Unit shutdown();
 
     // Instance descriptions.  Call setInstanceDescriptions with a map of
     // (name -> resources) information.  Then, launchInstanceNamed() returns a
@@ -109,7 +109,6 @@ interface CloudProvider {
     DeploymentComponent prelaunchInstanceNamed(String instancename);
     DeploymentComponent launchInstanceNamed(String instancename);
 
-    //Unit addSmartDeployInstances();
 }
 
 // interface CloudProviderForDeploymentComponent extends CloudProvider {
@@ -135,7 +134,7 @@ class SimCloudProvider(String name) implements CloudProvider {
     List<DeploymentComponent> killedInstances = list[];
 
     Int nextInstanceId = 0;
-    // Rat accumulatedCost = 0;
+    Rat accumulatedCost = 0;
     Bool keeprunning = True;    // Flag for forced shutdown
 
     // Unit startAccounting() {
@@ -146,7 +145,7 @@ class SimCloudProvider(String name) implements CloudProvider {
     //     }
     // }
 
-    //Unit shutdown() { keeprunning = False; }
+    Unit shutdown() { keeprunning = False; }
 
     // Rat sumOfCosts(Set<DeploymentComponent> dcs_) {
     //     Set<DeploymentComponent> dcs = dcs_;
@@ -225,7 +224,7 @@ class SimCloudProvider(String name) implements CloudProvider {
         return result;
     }
 
-    Bool acquireInstance_(DeploymentComponent instance_) {
+    Bool acquireInstance(DeploymentComponent instance_) {
         Bool result = True;
         //CloudProvider cp = await instance_!getProvider();
         // if (cp != this) {
@@ -241,6 +240,10 @@ class SimCloudProvider(String name) implements CloudProvider {
         // }
         return False;
     }
+    Bool releaseInstance(DeploymentComponent instance_) {
+        // TODO
+        return True;
+    }
     // Bool releaseInstance(DeploymentComponent instance_) {
     //     // FIXME: Currently we do not protect against double-release and always
     //     // return True.  Once we have means of testing whether there is still
@@ -253,7 +256,7 @@ class SimCloudProvider(String name) implements CloudProvider {
     // }
 
     Bool shutdownInstance(DeploymentComponent instance_) {
-        instance_!shutdown();
+        instance_!shutdown_();
         return True;
     }
 
@@ -276,9 +279,9 @@ class SimCloudProvider(String name) implements CloudProvider {
     //     if (emptySet(launchedInstances)) keeprunning = False;
     // }
 
-    // Rat getAccumulatedCost() {
-    //     return accumulatedCost;
-    // }
+    Rat getAccumulatedCost() {
+        return accumulatedCost;
+    }
 
     // Sets up information for [pre]launchInstanceNamed()
     Unit setInstanceDescriptions(Map<String, Map<Resourcetype, Rat>> instanceDescriptions) {
