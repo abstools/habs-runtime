@@ -1,0 +1,41 @@
+module ABS.BaseDC;
+
+export *;
+
+// /type DC = DeploymentComponent;
+
+data InfRat = InfRat_ | Fin(Rat finvalue);
+
+data Resourcetype = Speed     // Execution speed in "cpu units" - used by [Cost: x] annotation
+                  | Cores     // Number of cores (static declaration for deployment planning)
+                  | Bandwidth // Transmit speed in "data units" - used by [DataSize: x] annotation
+                  | Memory    // Memory size (static declaration for deployment planning)
+                  | Startupduration            // Time to start, used by CloudProvider
+                  | Shutdownduration           // Time to shut down, used by CloudProvider
+                  | PaymentInterval            // Billing period, used by CloudProvider
+                  | CostPerInterval            // Cost per billing period, used by CloudProvider
+                  ;
+
+interface DeploymentComponent {
+  [Atomic] Rat load(Resourcetype rtype, Int periods);
+  [Atomic] InfRat total(Resourcetype rtype);
+  Unit transfer(DeploymentComponent target, Rat amount, Resourcetype rtype);
+  Unit decrementResources(Rat amount, Resourcetype rtype);
+  Unit incrementResources(Rat amount, Resourcetype rtype);
+  [Atomic] String getName();
+  //[Atomic] CloudProvider getProvider();
+  [Atomic] Time getCreationTime();
+  [Atomic] Rat getStartupDuration();
+  [Atomic] Rat getShutdownDuration();
+  [Atomic] Int getPaymentInterval();
+  [Atomic] Rat getCostPerInterval();
+  [Atomic] Rat getNumberOfCores();
+  Bool acquire();
+  Bool release();
+  Bool shutdown();
+
+  // for sim purposes, hidden
+  Unit request__(Int nrInstr);
+}
+
+

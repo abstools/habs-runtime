@@ -1,111 +1,7 @@
 module ABS.DC;
 
-// import * from ABS.BaseDC;
+export SimDeploymentComponent, CloudProvider, SimCloudProvider;
 
-// module ABS.BaseDC;
-
-export *;
-
-// /type DC = DeploymentComponent;
-
-data InfRat = InfRat_ | Fin(Rat finvalue);
-
-data Resourcetype = Speed     // Execution speed in "cpu units" - used by [Cost: x] annotation
-                  | Cores     // Number of cores (static declaration for deployment planning)
-                  | Bandwidth // Transmit speed in "data units" - used by [DataSize: x] annotation
-                  | Memory    // Memory size (static declaration for deployment planning)
-                  | Startupduration            // Time to start, used by CloudProvider
-                  | Shutdownduration           // Time to shut down, used by CloudProvider
-                  | PaymentInterval            // Billing period, used by CloudProvider
-                  | CostPerInterval            // Cost per billing period, used by CloudProvider
-                  ;
-
-interface DeploymentComponent {
-  [Atomic] Rat load(Resourcetype rtype, Int periods);
-  [Atomic] InfRat total(Resourcetype rtype);
-  Unit transfer(DeploymentComponent target, Rat amount, Resourcetype rtype);
-  Unit decrementResources(Rat amount, Resourcetype rtype);
-  Unit incrementResources(Rat amount, Resourcetype rtype);
-  [Atomic] String getName();
-  //[Atomic] CloudProvider getProvider();
-  [Atomic] Time getCreationTime();
-  [Atomic] Rat getStartupDuration();
-  [Atomic] Rat getShutdownDuration();
-  [Atomic] Int getPaymentInterval();
-  [Atomic] Rat getCostPerInterval();
-  [Atomic] Rat getNumberOfCores();
-  Bool acquire();
-  Bool release();
-  Bool shutdown();
-
-  // for sim purposes, hidden
-  Unit request__(Int nrInstr);
-}
-
-
-class MainDeploymentComponent implements DeploymentComponent {
-  // TODO
-  Rat load(Resourcetype rtype, Int periods) { 
-    return 0; 
-  }
-  // TODO
-  Rat total(Resourcetype rtype) {
-    return Fin(0);
-  }
-
-  Unit transfer(DeploymentComponent target, Rat amount, Resourcetype rtype) {}
-
-  // TODO
-  Unit decrementResources(Rat amount, Resourcetype rtype) {}
-  // TODO
-  Unit incrementResources(Rat amount, Resourcetype rtype) {}
-  
-  String getName() {
-    return "<main>";
-  }
-
-  // CloudProvider getProvider();
-
-  // TODO
-   Time getCreationTime() {
-    return now(); // stub, TODO
-  }
-   Rat getStartupDuration() {
-    return 0;
-  }
-
-  // TODO
-   Rat getShutdownDuration() {
-    return 0;
-  }
-
-  // TODO
-   Int getPaymentInterval() {
-    return 0;
-  }
-
-  // TODO
-   Rat getCostPerInterval() {
-    return 0;
-  }
-
-  // TODO
-   Rat getNumberOfCores() {
-    return 0;
-  }
-  // TODO
-  Bool acquire() { return True; }
-  // TODO
-  Bool release() { return True; }
-  // TODO
-  Bool shutdown() { return True; }
-
-
-  // for sim purposes, hidden
-  Unit request__(Int nrInstr) {
-      // ignore for main dc
-  }
-}
 
 class SimDeploymentComponent(String description, Map<Resourcetype,Rat> initconfig) implements DeploymentComponent {
   Int instrPS= truncate(lookupDefault(initconfig, Speed, 0));
@@ -114,10 +10,13 @@ class SimDeploymentComponent(String description, Map<Resourcetype,Rat> initconfi
   Rat load(Resourcetype rtype, Int periods) { 
     return 0; 
   }
-  // TODO
-  Rat total(Resourcetype rtype) {
-    return Fin(0);
-  }
+
+  InfRat total(Resourcetype rtype) {
+    return case lookup(initconfig, rtype) {
+        Nothing => InfRat;
+        Just(v) => Fin(v);
+    };
+   }
 
   Unit transfer(DeploymentComponent target, Rat amount, Resourcetype rtype) {}
 
@@ -167,23 +66,659 @@ class SimDeploymentComponent(String description, Map<Resourcetype,Rat> initconfi
   Bool shutdown() { return True; }
 
   Unit request__(Int nrInstr) {
-    println(toString(nrInstr));
-    if (nrInstr > instrPS) {
+    Int input = nrInstr;
+    while (input > instrPS) {
       duration(1,1);
       suspend;
-      return this.request__(nrInstr-instrPS); // tail-recursive
+      input = input - instrPS;
     }
-    else {
-      Rat remaining = nrInstr/instrPS;
-      duration(remaining,remaining);
-    }
+    Rat remaining = nrInstr/instrPS;
+    duration(remaining,remaining);
   }
 }
 
 
-{
-  DeploymentComponent o = new SimDeploymentComponent("mplo", map[Pair(Speed,3)]);
-  Fut<Unit> f1 =o!request__(10);
-  Fut<Unit> f2 = o!request__(19);
-  await f1? & f2?;
+// interface DeploymentComponentForCloudProvider extends DeploymentComponent {
+//     Unit setProvider(CloudProviderForDeploymentComponent provider);
+// }
+
+interface CloudProvider {
+    // (pre)launchInstance might have a delay, the others are instantaneous.
+    // launchInstance might hand out an already-running instance if it has
+    // been released; in this case there will be no delay.
+    DeploymentComponent prelaunchInstance(Map<Resourcetype, Rat> d);
+    DeploymentComponent launchInstance(Map<Resourcetype, Rat> description);
+    // acquireInstance, releaseInstance are called from deployment components.
+    // launchInstance does the equivalent of acquireInstance.
+    Bool acquireInstance_(DeploymentComponent instance_);
+    //Bool releaseInstance(DeploymentComponent instance_);
+    Bool shutdownInstance(DeploymentComponent instance_);
+
+    // Rat getAccumulatedCost();
+    //Unit shutdown();
+
+    // Instance descriptions.  Call setInstanceDescriptions with a map of
+    // (name -> resources) information.  Then, launchInstanceNamed() returns a
+    // deployment component with the specified resources, or null if the given
+    // name could not be found.  The resulting deployment components are then
+    // handled as normal (acquire/release/kill).
+    Unit setInstanceDescriptions(Map<String, Map<Resourcetype, Rat>> instanceDescriptions);
+    Unit addInstanceDescription(Pair<String, Map<Resourcetype, Rat>> instanceDescription);
+    Unit removeInstanceDescription(String instanceDescriptionName);
+    Map<String, Map<Resourcetype, Rat>> getInstanceDescriptions();
+    DeploymentComponent prelaunchInstanceNamed(String instancename);
+    DeploymentComponent launchInstanceNamed(String instancename);
+
+    //Unit addSmartDeployInstances();
 }
+
+// interface CloudProviderForDeploymentComponent extends CloudProvider {
+//     Unit internalShutdownInstance(DeploymentComponentForCloudProvider instance_);
+// }
+
+
+class SimCloudProvider(String name) implements CloudProvider {
+    // Preliminary version - mind the FIXMEs!
+
+    // Instance type descriptions for launchInstanceNamed()
+    Map<String, Map<Resourcetype, Rat>> instanceDescriptions = map[];
+
+    // All launched instances
+    // Set<DeploymentComponent> launchedInstances = set[];
+    // // Launched instances that are currently acquired
+    // Set<DeploymentComponent> acquiredInstances = set[];
+    // Set<DeploymentComponent> killedInstances = set[];
+
+    List<DeploymentComponent> launchedInstances = list[];
+    // Launched instances that are currently acquired
+    List<DeploymentComponent> acquiredInstances = list[];
+    List<DeploymentComponent> killedInstances = list[];
+
+    Int nextInstanceId = 0;
+    // Rat accumulatedCost = 0;
+    Bool keeprunning = True;    // Flag for forced shutdown
+
+    // Unit startAccounting() {
+    //     while(keeprunning && !emptySet(launchedInstances)) {
+    //         Rat cost = this.sumOfCosts(launchedInstances);
+    //         accumulatedCost = accumulatedCost + cost;
+    //         await duration(1, 1);
+    //     }
+    // }
+
+    //Unit shutdown() { keeprunning = False; }
+
+    // Rat sumOfCosts(Set<DeploymentComponent> dcs_) {
+    //     Set<DeploymentComponent> dcs = dcs_;
+    //     Rat result = 0;
+    //     Time t = now();
+    //     while (!emptySet(dcs)) {
+    //         DeploymentComponent dc = take(dcs);
+    //         dcs = remove(dcs, dc);
+    //         Rat cost = await dc!getCostPerInterval();
+    //         if (cost > 0) {
+    //             Time creationtime = await dc!getCreationTime();
+    //             Rat time_elapse = timeDifference(t, creationtime);
+    //             Int interval = await dc!getPaymentInterval();
+    //             if (time_elapse % interval == 0) {
+    //                 result = result + cost;
+    //             }
+    //         }
+    //     }
+    //     return result;
+    // }
+
+    DeploymentComponent createInstance(String instancename, Map<Resourcetype, Rat> d) {
+        //Bool mightNeedToStartAccounting = emptySet(launchedInstances);
+        // DeploymentComponentForCloudProvider result
+        // = new SimDeploymentComponent(instancename + "-" + toString(nextInstanceId), d);
+        DeploymentComponent result = new SimDeploymentComponent(instancename + "-" + toString(nextInstanceId), d);
+        //result!setProvider(this);
+        nextInstanceId = nextInstanceId + 1;
+        // Work around a bug in the type system: upcasting in `insertElement'
+        // does not work although it should
+        DeploymentComponent stupidTypeSystem = result;
+        //launchedInstances = insertElement(launchedInstances, stupidTypeSystem);
+        launchedInstances = Cons(stupidTypeSystem,launchedInstances);
+        // Start accounting after adding new machine, before waiting for it to
+        // start up
+        //if (mightNeedToStartAccounting) this!startAccounting();
+        return result;
+    }
+
+    DeploymentComponent prelaunchInstance(Map<Resourcetype, Rat> d) {
+        DeploymentComponent result = this.createInstance(name, d);
+        Rat startup_duration = await result!getStartupDuration();
+        await duration(startup_duration, startup_duration);
+        return result;
+    }
+
+    DeploymentComponent prelaunchInstanceNamed(String instancename) {
+        Maybe<Map<Resourcetype, Rat>> mconfig = lookup(instanceDescriptions, instancename);
+        DeploymentComponent dc = null;
+        if (isJust(mconfig)) {
+            Map<Resourcetype, Rat> config = fromJust(mconfig);
+            dc = this.createInstance(name + "-" + instancename, config);
+        }
+        Rat startup_duration = await dc!getStartupDuration();
+        await duration(startup_duration, startup_duration);
+        return dc;
+    }
+
+    DeploymentComponent launchInstance(Map<Resourcetype, Rat> d) {
+        // if we don't call prelaunchInstance here, remember to start
+        // accounting as well
+        DeploymentComponent result = this.prelaunchInstance(d);
+        //acquiredInstances = insertElement(acquiredInstances, result);
+        acquiredInstances = Cons(result,acquiredInstances);
+        return result;
+    }
+
+    DeploymentComponent launchInstanceNamed(String instancename) {
+        // if we don't call prelaunchInstance here, remember to start
+        // accounting as well
+        DeploymentComponent result = this.prelaunchInstanceNamed(instancename);
+        if (result != null) {
+            //acquiredInstances = insertElement(acquiredInstances, result);
+            acquiredInstances = Cons(result,acquiredInstances);
+        }
+        return result;
+    }
+
+    Bool acquireInstance_(DeploymentComponent instance_) {
+        Bool result = True;
+        //CloudProvider cp = await instance_!getProvider();
+        // if (cp != this) {
+        //     // it's not one of "our" deployment components
+        //     result = False;
+        // } else 
+        // if (contains_(acquiredInstances, instance_)
+        //     || contains_(killedInstances, instance_)) {
+        //     result = False;
+        // } else {
+        //     //acquiredInstances = insertElement(acquiredInstances, instance_);
+        //   acquiredInstances = Cons(instance_, acquiredInstances);
+        // }
+        return False;
+    }
+    // Bool releaseInstance(DeploymentComponent instance_) {
+    //     // FIXME: Currently we do not protect against double-release and always
+    //     // return True.  Once we have means of testing whether there is still
+    //     // activity on a deployment component, we could refuse to release it in
+    //     // that case and return False.
+    //     if (contains(acquiredInstances, instance_)) {
+    //         acquiredInstances = remove(acquiredInstances, instance_);
+    //     }
+    //     return True;
+    // }
+
+    Bool shutdownInstance(DeploymentComponent instance_) {
+        instance_!shutdown();
+        return True;
+    }
+
+    // Unit internalShutdownInstance(DeploymentComponentForCloudProvider instance_) {
+    //     DeploymentComponent stupidTypeSystem = instance_;
+    //     // Also kill an instance that is acquired.  FIXME: is this the right
+    //     // thing, or should we refuse to shutdown?
+    //     acquiredInstances = remove(acquiredInstances, stupidTypeSystem);
+    //     // Insert `instance' into killedInstances so it doesn't get
+    //     // re-acquired.
+    //     killedInstances = insertElement(killedInstances, stupidTypeSystem);
+    //     Rat shutdown_duration = await instance_!getShutdownDuration();
+    //     await duration(shutdown_duration, shutdown_duration);
+
+    //     // Now remove from launchedInstances (after waiting for shutdown) so
+    //     // shutdown duration gets billed
+    //     launchedInstances = remove(launchedInstances, stupidTypeSystem);
+
+    //     // Shut down accounting thread if necessary
+    //     if (emptySet(launchedInstances)) keeprunning = False;
+    // }
+
+    // Rat getAccumulatedCost() {
+    //     return accumulatedCost;
+    // }
+
+    // Sets up information for [pre]launchInstanceNamed()
+    Unit setInstanceDescriptions(Map<String, Map<Resourcetype, Rat>> instanceDescriptions) {
+        this.instanceDescriptions = instanceDescriptions;
+    }
+
+    // Adds an instance for [pre]launchInstanceNamed()
+    Unit addInstanceDescription(Pair<String, Map<Resourcetype, Rat>> instanceDescription) {
+        this.instanceDescriptions = insert(this.instanceDescriptions, instanceDescription);
+    }
+
+    // Removes an instance for [pre]launchInstanceNamed() based on its name
+    Unit removeInstanceDescription(String instanceDescriptionName) {
+        this.instanceDescriptions = removeKey(this.instanceDescriptions, instanceDescriptionName);
+    }
+
+    Map<String, Map<Resourcetype, Rat>> getInstanceDescriptions() {
+        return this.instanceDescriptions;
+    }
+
+}
+
+
+// module ABS.SetsMaps;
+
+// Sets
+
+//export *;
+
+// Sets are currently implemented as sorted lists (any implementation
+
+// must yield the same structure regardless of insertion order so that
+
+// set equality via == is preserved).  Using the Insert_ constructor
+
+// directly is strongly discouraged.
+
+data Set<A> = EmptySet | Insert(A, Set<A>);
+
+
+
+// set constructor helper
+
+def Set<A> set<A>(List<A> l) = 
+
+    case l { 
+
+       Nil => EmptySet; 
+
+       Cons(x,xs) => insertElement(set(xs), x); 
+
+    };
+
+
+
+/**
+
+ * Returns True if set 'ss' contains element 'e', False otherwise.
+
+ */
+
+def Bool contains<A>(Set<A> ss, A e) =
+
+  case ss {
+
+    EmptySet => False ;
+
+    Insert(e, _) => True;
+
+    Insert(x, xs) => if x > e then False else contains(xs, e);
+
+  };
+
+  
+
+/**
+
+ * Returns True if set 'xs' is empty, False  otherwise.
+
+ */
+
+def Bool emptySet<A>(Set<A> xs) = (xs == EmptySet); 
+
+
+
+/**
+
+ * Returns the size of set 'xs'.
+
+ */
+
+def Int size<A>(Set<A> xs) = 
+
+   case xs {
+
+      EmptySet => 0 ; 
+
+      Insert(s, ss) => 1 + size(ss); 
+
+   };
+
+
+
+/**
+
+ * Returns the union of sets 'set1' and 'set2'.
+
+ */
+
+def Set<A> union<A>(Set<A> set1, Set<A> set2) =
+
+   case set1 {
+
+      EmptySet => set2;
+
+      Insert(e1, ss1) =>  case set2 {
+
+          EmptySet => set1;
+
+          Insert(e1, ss2) => Insert(e1, union(ss1, ss2));
+
+          Insert(e2, ss2) =>
+
+            if e1 < e2
+
+            then Insert(e1, union(ss1, set2))
+
+            else Insert(e2, union(set1, ss2));
+
+      };
+
+   }; 
+
+
+
+/**
+
+ * Returns the intersection of sets 'set1' and 'set2'.
+
+ */
+
+def Set<A> intersection<A>(Set<A> set1, Set<A> set2) =
+
+   case set1 {
+
+      EmptySet => EmptySet;
+
+      Insert(e1, ss1) =>  case set2 {
+
+          EmptySet => EmptySet;
+
+          Insert(e1, ss2) => Insert(e1, intersection(ss1, ss2));
+
+          Insert(e2, ss2) =>
+
+            if e1 < e2
+
+            then intersection(ss1, set2)
+
+            else intersection(set1, ss2);
+
+      };
+
+   };
+
+
+
+/**
+
+ * Returns the difference of sets 'set1' and 'set2', i.e., all
+
+ * elements of 'set1' that are not in 'set2'.
+
+ */
+
+def Set<A> difference<A>(Set<A> set1, Set<A> set2) =
+
+   case set1 {
+
+      EmptySet => EmptySet;
+
+      Insert(e1, ss1) =>  case set2 {
+
+          EmptySet => set1;
+
+          Insert(e1, ss2) => difference(ss1, ss2);
+
+          Insert(e2, ss2) =>
+
+            if e1 < e2
+
+            then Insert(e1, difference(ss1, set2))
+
+            else difference(set1, ss2);
+
+      };
+
+   };
+
+
+
+/**
+
+ * Returns a set with all elements of set 'xs' plus element 'e'.
+
+ * Returns 'xs' if 'xs' already contains 'e'.
+
+ */
+
+def Set<A> insertElement<A>(Set<A> xs, A e) =
+
+  case xs {
+
+      EmptySet => Insert(e, EmptySet);
+
+      Insert(e, _) => xs;
+
+      Insert(x, ss) => if e < x then Insert(e, xs) else Insert(x, insertElement(ss, e));
+
+  };
+
+
+
+/**
+
+ * Returns a set with all elements of set 'xs' except element 'e'.
+
+ */
+
+def Set<A> remove<A>(Set<A> xs, A e) = 
+
+  case xs {
+
+     EmptySet => EmptySet ;
+
+     Insert(e, ss) => ss;
+
+     Insert(x, ss) => if e < x then xs else Insert(x, remove(ss, e));
+
+  };
+
+
+
+/**
+
+ * Returns one (arbitrary) element from a set.
+
+ * To iterate over a set, take one element and remove it from the set.
+
+ * Repeat until set is empty.
+
+ */
+
+def A take<A>(Set<A> ss) =
+
+  case ss {
+
+    Insert(e, _) => e;
+
+  };
+
+
+
+// checks whether the input set has more elements to be iterated.
+
+def Bool hasNext<A>(Set<A> s) = ! emptySet(s); 
+
+
+
+// Partial function to iterate over a set.
+
+def Pair<Set<A>,A> next<A>(Set<A> s) = 
+
+   case s { 
+
+      Insert(e, set2) => Pair(set2,e); 
+
+   };
+
+
+// Maps
+
+data Map<A, B> = EmptyMap | InsertAssoc(Pair<A, B>, Map<A, B>);
+
+ // map constructor helper (does not preserve injectivity)
+
+def Map<A, B> map<A, B>(List<Pair<A, B>> l) =
+
+  case l { 
+
+     Nil => EmptyMap; 
+
+     Cons(hd, tl) => InsertAssoc(hd, map(tl)); 
+
+  };
+
+  
+
+  
+
+def Map<A, B> removeKey<A, B>(Map<A, B> map, A key) = // remove from the map
+
+  case map {
+
+    EmptyMap => map;
+
+    InsertAssoc(Pair(key, _), m) => m;
+
+    InsertAssoc(pair, tail) => InsertAssoc(pair, removeKey(tail, key));
+
+  };
+
+    
+
+
+
+def List<B> values<A, B>(Map<A, B> map) =
+
+  case map {
+
+    EmptyMap => Nil ;
+
+    InsertAssoc(Pair(_, elem), tail) => Cons(elem, values(tail)) ;
+
+  };
+
+
+
+/**
+
+ * Returns a set containing all keys of map 'map'.
+
+ */
+
+def Set<A> keys<A, B>(Map<A, B> map) =
+
+  case map { 
+
+    EmptyMap => EmptySet ;
+
+    InsertAssoc(Pair(a, _), tail) => insertElement(keys(tail), a); 
+
+  };
+
+    
+
+/**
+
+ * Returns the value associated with key 'k' in map 'ms', or 'Nothing'.
+
+ */
+
+def Maybe<B> lookup<A, B>(Map<A, B> ms, A k) = // retrieve from the map
+
+  case ms {
+
+     InsertAssoc(Pair(k, y), _) => Just(y);
+
+     InsertAssoc(_, tm) => lookup(tm, k);
+
+     EmptyMap => Nothing;
+
+  };
+
+
+
+/**
+
+ * Compatibility stub for #342. DEPRECATED!
+
+ */
+
+def Maybe<B> lookupMaybe<A, B>(Map<A, B> ms, A k) = lookup(ms, k);
+
+
+
+/**
+
+ * Returns the value associated with key 'k' in map 'ms',
+
+ * or fails if not present.
+
+ */
+
+def B lookupUnsafe<A, B>(Map<A, B> ms, A k) = // retrieve from the map
+
+  fromJust(lookup(ms,k));
+
+  
+
+/**
+
+ * Returns the value associated with key 'k' in map 'ms', or the value 'd'
+
+ * if 'k' has no entry in 'ms'.
+
+ */
+
+def B lookupDefault<A, B>(Map<A, B> ms, A k, B d) = // retrieve from the map
+
+  case ms {
+
+     InsertAssoc(Pair(k, y), _) => y;
+
+     InsertAssoc(_, tm) => lookupDefault(tm, k, d);
+
+     EmptyMap => d;
+
+  };
+
+
+
+/**
+
+ * Returns a map with all entries of 'map' plus an entry 'p',
+
+ * which might override but not remove another entry with the same key.
+
+ */
+
+def Map<A, B> insert<A, B>(Map<A, B> map, Pair<A, B> p) = InsertAssoc(p, map);
+
+
+
+/**
+
+ * Returns a map with all entries of 'ms' plus an entry mapping 'k' to 'v',
+
+ * minus the first entry already mapping 'k' to a value.
+
+ */  
+
+def Map<A, B> put<A, B>(Map<A, B> ms, A k, B v) =
+
+  case ms {
+
+    EmptyMap => InsertAssoc(Pair(k, v),EmptyMap);
+
+    InsertAssoc(Pair(k, _), ts) => InsertAssoc(Pair(k, v), ts);
+
+    InsertAssoc(p, ts) => InsertAssoc(p, put(ts, k, v));
+
+  };

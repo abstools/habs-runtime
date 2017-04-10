@@ -85,7 +85,7 @@ type Rat = Data.Ratio.Ratio Int
 
 
 -------------- GEN
-data InfRat = InfRat_
+data InfRat = InfRat
             | Fin !Rat
             deriving (I'.Eq, I'.Ord, I'.Show)
 finvalue (Fin a) = a
