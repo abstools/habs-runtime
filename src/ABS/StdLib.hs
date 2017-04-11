@@ -26,9 +26,9 @@ module ABS.StdLib
      -- * Functions for "List" datastructures
      list, tail, head, length, isEmpty, nth, concatenate, appendright, without, repeat, reverse, copy, fmap'List,
      -- * The ABS Map datatype and its functions
-     Map, map, put, insert, lookup, lookupMaybe, lookupUnsafe, lookupDefault, removeKey, keys, values,
+     Map(..), map, put, insert, lookup, lookupMaybe, lookupUnsafe, lookupDefault, removeKey, keys, values,
      -- * The ABS Set datatype and its functions
-     Set, set, emptySet, size, contains, union, intersection, difference, insertElement, remove, take, hasNext, next,
+     Set(..), set, emptySet, size, contains, union, intersection, difference, insertElement, remove, take, hasNext, next,
      -- * Printing to Strings and to standard-output
      toString, intToString, substr, strlen,
      -- * For Realtime
