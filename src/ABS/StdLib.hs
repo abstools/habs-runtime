@@ -13,7 +13,7 @@ module ABS.StdLib
      -- * Rational division. Takes any number but always returns a Rat.
      (Prelude./),
      -- * Rat to Int conversion
-     Prelude.truncate,
+     truncate,
      -- * Boolean Operations 
      (Prelude.||), (Prelude.&&), (Prelude.==), Prelude.not,
      -- * Ordering operations
@@ -62,6 +62,10 @@ x % y = let res = x Prelude./ y
 {-# INLINE pow #-}
 pow :: Prelude.Num a => a -> Int -> a
 pow = (Prelude.^)
+
+{-# INLINE truncate #-}
+truncate :: Rat -> Int
+truncate = Prelude.truncate
 
 type Unit = ()
 
