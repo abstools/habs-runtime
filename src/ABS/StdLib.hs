@@ -70,6 +70,10 @@ x % y = let res = x / y
 pow :: I'.Num a => a -> Int -> a
 pow = (I'.^)
 
+{-# INLINE truncate #-}
+truncate :: Rat -> Int
+truncate = Prelude.truncate
+
 type Unit = ()
 
 --type Int = I'.Int
