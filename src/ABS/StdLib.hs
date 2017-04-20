@@ -36,7 +36,8 @@ module ABS.StdLib
     ) where
 
 import ABS.Runtime.Base (Time)
-import Prelude (Int, Bool (..), String, (+), (-), (*), abs, (/), (||), truncate, not,  (&&), (==), (<), (<=), (>=), (>), min, max, minimum, maximum, fst, snd, Maybe (..), Either (..), tail, head, repeat, reverse)
+import Prelude (Int, Bool (..), String, (+), (-), (*), abs, (/), (||), not, (&&), (==), (<), (<=), (>=), (>), min, max, minimum, maximum, fst, snd, Maybe (..), Either (..), tail, head, repeat, reverse)
+import qualified Prelude (truncate)
 import Data.Ratio (numerator, denominator)
 import Data.Maybe (fromJust, isJust)
 import Data.List (length)
