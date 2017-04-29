@@ -112,10 +112,9 @@ instance DeploymentComponent' SimDeploymentComponent where
                             =<< I'.readIORef this'))
                remaining :: IORef' Rat <- I'.lift
                                             ((\ this'' ->
-                                                I'.newIORef
-                                                  ((up' nrInstr :: Rat) /
-                                                     (up' (instrPS'SimDeploymentComponent this'') ::
-                                                        Rat)))
+                                                I'.newIORef =<<
+                                                ((/) <$!> (up' <$!> I'.readIORef input) <*>
+                                                    (up' <$!> I'.pure (instrPS'SimDeploymentComponent this''))))
                                                =<< I'.readIORef this')
                I'.lift
                  ((\ e1' -> duration e1' =<< I'.readIORef remaining) =<<

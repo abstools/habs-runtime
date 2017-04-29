@@ -72,7 +72,7 @@ class SimDeploymentComponent(String description, Map<Resourcetype,Rat> initconfi
       suspend;
       input = input - instrPS;
     }
-    Rat remaining = nrInstr/instrPS;
+    Rat remaining = input/instrPS;
     duration(remaining,remaining);
   }
 }
