@@ -6,7 +6,7 @@ module ABS.Runtime.Extension.Exception
     -- This has the benefit of catching exceptions from the FFI
     , PatternMatchFail (..), RecSelError (..), ArithException (DivideByZero), AssertionFailed (..)
     -- ^ the ABS-specific builtin exceptions
-    , NullException(..), SyncOnDifferentCOG (..)     
+    , NullException(..)
     , ABSException'(..), absExceptionToException', absExceptionFromException' -- the helper functions to construct instances of Exception (boilerplate)
     ) where
 
@@ -74,7 +74,6 @@ absExceptionFromException' x = do
 
 -- ABS-exclusive exceptions
 data NullException = NullException deriving Show
-data SyncOnDifferentCOG = SyncOnDifferentCOG deriving Show
 
 -- we don't need this, since we have a weak notion of "soft realtime": based on when it is put back to the enabled queue, not actual execution
 --data DurationExpired = DurationExpired deriving Show
@@ -86,8 +85,3 @@ data SyncOnDifferentCOG = SyncOnDifferentCOG deriving Show
 instance Control.Monad.Catch.Exception NullException where
   toException = absExceptionToException'
   fromException = absExceptionFromException'
-
-instance Control.Monad.Catch.Exception SyncOnDifferentCOG where
-  toException = absExceptionToException'
-  fromException = absExceptionFromException'
-
