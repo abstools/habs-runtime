@@ -243,10 +243,10 @@ awaitDuration' (Obj' _ thisCog@(Cog _ thisMailBox)) tmin _tmax =
 {-# INLINE sync' #-}
 -- | sync
 sync' :: Obj' this -> Obj' a -> (Obj' a -> ABS' r) -> ABS' r
-sync' (Obj' _ (Cog _ thisCogToken)) callee@(Obj' _ (Cog _ calleeCogToken)) methodPartiallyApplied = 
-    if calleeCogToken == thisCogToken
+sync' (Obj' _ (Cog _ thisMailBox)) callee@(Obj' _ (Cog _ otherMailBox)) methodPartiallyApplied = 
+    if otherMailBox == thisMailBox
     then methodPartiallyApplied callee
-    else throw SyncOnDifferentCOG
+    else lift $ get =<< (callee <!> methodPartiallyApplied) -- translated to an async+get, could be further optimized like awaitSugar' to keep 1 less thread)
 
 {-# INLINE (<..>) #-}
 -- | optimized sync, by not running same-cog-check. Used only by the generation when stumbled on "this.m()".
