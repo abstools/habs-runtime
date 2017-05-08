@@ -11,6 +11,8 @@ import Data.Ratio (Ratio)
 import Data.Dynamic (Dynamic)
 import System.IO.Unsafe (unsafePerformIO)
 import Data.Map (Map,empty)
+import Control.Concurrent (ThreadId)
+import System.Mem.Weak (Weak)
 import qualified Data.Ratio (Ratio)
 -- needed because of inclusion of generated code
 import Prelude  as I' (fromIntegral, Bool, Int, String, IO, Eq (..),Ord(..), Show(..), undefined, error)
@@ -153,6 +155,7 @@ class DeploymentComponent' a where
         
         request' :: Int -> Obj' a -> ABS' Unit
 
+        register' :: Weak ThreadId -> Obj' a -> ABS' ()
 
 data DeploymentComponent = forall a . DeploymentComponent' a =>
                              DeploymentComponent (Obj' a)

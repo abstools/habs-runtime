@@ -4,7 +4,7 @@ module ABS.Runtime.Prim
     , suspend, awaitFuture', awaitBool', get
     , awaitFutures'
     , awaitFutureField', ChangedFuture' (..)
-    , new, newlocal'
+    , new, newlocal', new_dc'
     , sync', (<..>), (<!>), (<!!>), awaitSugar', awaitSugar''
     , skip, main_is'
     , while, while'
@@ -26,7 +26,7 @@ import ABS.Runtime.Base
 import ABS.Runtime.CmdOpt
 import ABS.Runtime.TQueue (TQueue (..), newTQueueIO, writeTQueue, readTQueue)
 import ABS.Runtime.Extension.Exception hiding (throw, catch)
-import Control.Concurrent (ThreadId, myThreadId, newEmptyMVar, isEmptyMVar, putMVar, readMVar, forkIO, threadDelay, runInUnboundThread)
+import Control.Concurrent (ThreadId, myThreadId, mkWeakThreadId, newEmptyMVar, isEmptyMVar, putMVar, readMVar, forkIO, threadDelay, runInUnboundThread)
 import Control.Concurrent.STM (atomically, readTVar, readTVarIO, writeTVar)    
 
 import Control.Monad.Trans.Cont (evalContT, callCC)
@@ -307,6 +307,32 @@ awaitSugar'' (Obj' _ thisCog@(Cog _ thisMailBox) _) obj@(Obj' _ otherCog@(Cog _ 
     back' thisCog)
 
 
+{-# INLINABLE new_dc' #-}
+-- | new creation of DeploymentComponents, only for simulated branch of Deployment Components
+new_dc' :: DeploymentComponent -> (Obj' a -> IO ()) -> a -> IO (Obj' a)
+new_dc' _dc initFun objSmartCon = do
+                -- create the cog
+                newCogSleepTable <- newIORef []
+                newCogMailBox <- newTQueueIO
+                let newCog = Cog newCogSleepTable newCogMailBox
+
+                -- create the object
+                newObj'Contents <- newIORef objSmartCon
+                let newObj' = Obj' newObj'Contents newCog (error "thisDC inside DC class/newlocal inside DC class") 
+                -- the DC of the DC is undefined
+                -- that means that DC or newlocal inside DC cannot call Cost
+                -- better it would be if we had mfix self
+
+                -- create the init process on the new Cog
+#ifdef WAIT_ALL_COGS
+                _ <- forkIO__tg $ do
+#else
+                _ <- forkIO $ do
+#endif
+                            initFun newObj'
+                            atomically (readTQueue newCogMailBox) >>= evalContT -- init method exits, does not have to findWoken because there can be no other processes yet
+                return newObj'
+
 {-# INLINABLE new #-}
 -- | new, unlifted
 new :: DeploymentComponent -> (Obj' a -> IO ()) -> a -> IO (Obj' a)
@@ -322,12 +348,14 @@ new dc initFun objSmartCon = do
 
                 -- create the init process on the new Cog
 #ifdef WAIT_ALL_COGS
-                _ <- forkIO__tg $ do
+                wtid <- mkWeakThreadId =<< (forkIO__tg $ do
 #else
-                _ <- forkIO $ do
+                wtid <- mkWeakThreadId =<< (forkIO $ do
 #endif
                             initFun newObj'
                             atomically (readTQueue newCogMailBox) >>= evalContT -- init method exits, does not have to findWoken because there can be no other processes yet
+                            )
+                (\ (DeploymentComponent dc') -> dc' <!!> register' wtid) dc
                 return newObj'
 
 
@@ -480,3 +508,4 @@ instance DeploymentComponent' MainDeploymentComponent where
         release this@(Obj' this' _ thisDC) = do lift (pure True)
         shutdown_ this@(Obj' this' _ thisDC) = do lift (pure True)
         request' nrInstr this@(Obj' this' _ thisDC) = pure ()
+        register' _ _this = pure ()

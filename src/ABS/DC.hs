@@ -15,6 +15,9 @@ module ABS.DC
 import ABS.Runtime.Base (DeploymentComponent(..), DeploymentComponent'(..), Resourcetype(..), InfRat(..), finvalue)
 import ABS.StdLib
 import ABS.Runtime
+import qualified Control.Concurrent.STM as I' (atomically)
+import qualified ABS.Runtime.TQueue as I' (unGetTQueue)
+import ABS.Runtime.Base (Cog (..))
 import Data.Function ((.))
 import Control.Applicative ((<*>), (*>))
 import Control.Monad ((=<<))
@@ -27,12 +30,13 @@ import qualified Prelude as I'
        (IO, Eq, Ord(..), Show(..), undefined, error, negate, fromIntegral,
         mapM_, id)
 import qualified Unsafe.Coerce as I' (unsafeCoerce)
-import qualified Control.Concurrent as I' (ThreadId)
+import qualified Control.Concurrent as I' (ThreadId, killThread, myThreadId)
+import qualified System.Mem.Weak as I' (Weak, deRefWeak)
 import qualified Control.Concurrent.MVar as I'
        (isEmptyMVar, readMVar)
 import Control.Exception (assert)
 import qualified Control.Exception as I'
-       (Exception(..), SomeException, throwTo, throw)
+       (Exception(..), SomeException, throwTo, throw, mask_)
 import qualified Data.Dynamic as I' (toDyn, fromDynamic)
 import qualified Data.Map as I' (lookup)
 import qualified Web.Scotty as I' (get, param, json, raise)
@@ -45,14 +49,15 @@ data SimDeploymentComponent = SimDeploymentComponent{description'SimDeploymentCo
                                                      :: String,
                                                      initconfig'SimDeploymentComponent ::
                                                      Map Resourcetype Rat,
-                                                     instrPS'SimDeploymentComponent :: Int}
+                                                     instrPS'SimDeploymentComponent :: Int,
+                                                     wtids'SimDeploymentComponent :: List (I'.Weak I'.ThreadId)}
 
 smart'SimDeploymentComponent ::
                              String -> Map Resourcetype Rat -> SimDeploymentComponent
 smart'SimDeploymentComponent description'this initconfig'this
   = (\ instrPS'this ->
        (SimDeploymentComponent description'this initconfig'this
-          instrPS'this))
+          instrPS'this []))
       ((truncate (lookupDefault initconfig'this (Speed) 0)))
 
 init'SimDeploymentComponent ::
@@ -94,7 +99,16 @@ instance DeploymentComponent' SimDeploymentComponent where
           = do I'.lift (I'.pure 0)
         acquire this@(Obj' this' _ thisDC) = do I'.lift (I'.pure (True))
         release this@(Obj' this' _ thisDC) = do I'.lift (I'.pure (True))
-        shutdown_ this@(Obj' this' _ thisDC) = do I'.lift (I'.pure (True))
+        shutdown_ this@(Obj' this' (Cog _ tq) thisDC) = do 
+          I'.lift (
+              (\ this'' -> I'.mask_ (I'.mapM_ 
+                    (\ wtid' -> (\case 
+                          Just tid' -> I'.killThread tid'
+                          _ -> I'.pure ()) =<< I'.deRefWeak wtid')
+                    (wtids'SimDeploymentComponent this'')))
+               =<< I'.readIORef this')
+          I'.lift (I'.atomically (I'.unGetTQueue tq (I'.lift (I'.killThread =<< I'.myThreadId))))
+          I'.lift (I'.pure (True))
         request' nrInstr this@(Obj' this' _ thisDC)
           = do input :: IORef' Int <- I'.lift (I'.newIORef nrInstr)
                while
@@ -120,6 +134,9 @@ instance DeploymentComponent' SimDeploymentComponent where
                  ((\ e1' -> duration e1' =<< I'.readIORef remaining) =<<
                     I'.readIORef remaining)
                I'.pure ()
+
+        register' wtid this@(Obj' this' _ thisDC) = I'.lift (
+          (\ this'' -> I'.writeIORef this' (this''{wtids'SimDeploymentComponent = wtid : wtids'SimDeploymentComponent this''})) =<< I'.readIORef this')
 
 class CloudProvider' a where
         
@@ -398,7 +415,7 @@ createInstance''SimCloudProvider instancename d
   = do result :: IORef' DeploymentComponent <- I'.lift
                                                  ((\ this'' ->
                                                      ((I'.newIORef . DeploymentComponent) =<<
-                                                        new thisDC init'SimDeploymentComponent
+                                                        new_dc' thisDC init'SimDeploymentComponent
                                                           (smart'SimDeploymentComponent
                                                              ((instancename + "-") +
                                                                 (toString
