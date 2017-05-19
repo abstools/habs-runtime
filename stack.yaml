@@ -3,6 +3,7 @@ packages:
   - '.'
 extra-deps:
   - unagi-chan-0.4.0.0
+  - genifunctors-0.4
 flags:
   habs-runtime:
     wait-all-cogs: true
