@@ -7,7 +7,6 @@ import ABS.Runtime.TQueue (TQueue) -- mailbox
 import Data.IORef (IORef, newIORef)
 import Control.Monad.Trans.Cont (ContT)
 import System.Clock (TimeSpec) -- for realtime
-import Data.Ratio (Ratio)
 import Data.Dynamic (Dynamic)
 import System.IO.Unsafe (unsafePerformIO)
 import Data.Map (Map,empty)
@@ -90,6 +89,7 @@ type Rat = Data.Ratio.Ratio Int
 data InfRat = InfRat
             | Fin !Rat
             deriving (I'.Eq, I'.Ord, I'.Show)
+finvalue :: InfRat -> Rat
 finvalue (Fin a) = a
 finvalue _ = I'.error "Data constructor does not have accessor finvalue"
 
@@ -184,6 +184,7 @@ instance DeploymentComponent' Null' where
         release = I'.undefined
         shutdown_ = I'.undefined
         request' = I'.undefined
+        register' = I'.undefined
 
 instance DeploymentComponent' a => Sub' (Obj' a) DeploymentComponent where 
             up' = DeploymentComponent

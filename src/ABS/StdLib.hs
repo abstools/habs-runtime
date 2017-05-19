@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -w #-} -- turn off generated warnings
 {-# LANGUAGE NoImplicitPrelude, FlexibleInstances, OverloadedStrings, TemplateHaskell, PartialTypeSignatures, ExplicitForAll #-}
 
 module ABS.StdLib
