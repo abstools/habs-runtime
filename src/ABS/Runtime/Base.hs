@@ -61,10 +61,6 @@ class Sub' sub sup where
     -- | The upcasting method from a subtype to a supertype
     up' :: sub -> sup
 
--- self instance
-instance Sub' a a where
-    up' x = x
-
 instance Sub' Int (Data.Ratio.Ratio Int) where
   up' = fromIntegral
 
