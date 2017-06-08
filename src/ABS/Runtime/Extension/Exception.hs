@@ -1,11 +1,11 @@
 {-# LANGUAGE FlexibleInstances, ExistentialQuantification #-}
 module ABS.Runtime.Extension.Exception 
-    ( -- ^ the ABS commands in code generation
+    ( -- | the ABS commands in code generation
       throw, catch, Handler'(..), finally
-    -- ^ same exceptions as Haskell's, so import them rather than redefining.
+    -- | Same exceptions as Haskell's, so import them rather than redefining.
     -- This has the benefit of catching exceptions from the FFI
     , PatternMatchFail (..), RecSelError (..), ArithException (DivideByZero), AssertionFailed (..)
-    -- ^ the ABS-specific builtin exceptions
+    -- | the ABS-specific builtin exceptions
     , NullException(..)
     , ABSException'(..), absExceptionToException', absExceptionFromException' -- the helper functions to construct instances of Exception (boilerplate)
     ) where
