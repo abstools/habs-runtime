@@ -3,17 +3,20 @@
 module ABS.Runtime.Base where
 
 import ABS.Runtime.CmdOpt
-import Control.Concurrent.MVar (MVar, newMVar, modifyMVar_, readMVar) -- futures
+import Control.Concurrent.MVar (MVar, newMVar, modifyMVar, modifyMVar_, readMVar) -- futures
 import ABS.Runtime.TQueue (TQueue) -- mailbox
 import Data.IORef (IORef)
+import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Cont (ContT)
 import Data.Time.Clock (NominalDiffTime) -- for realtime
-import Control.Distributed.Process (Process, NodeId (..), ProcessId, processNodeId)
+import Control.Distributed.Process (Process, NodeId (..), ProcessId, processNodeId, expect, send)
+import Control.Distributed.Process.Serializable (Serializable)
+import Control.Distributed.Process.Node (forkProcess)
 import Network.Transport.TCP (encodeEndPointAddress)
 import Data.Binary
 import System.IO.Unsafe (unsafePerformIO)
 import Unsafe.Coerce (unsafeCoerce)
-import Control.Monad (when)
+import Control.Monad (when, forever)
 import qualified Data.Map.Strict as M (Map, empty, insert, lookup)
 
 -- | a future reference is a write-once locking var
@@ -21,10 +24,50 @@ import qualified Data.Map.Strict as M (Map, empty, insert, lookup)
 -- write-once is not imposed by Haskell, but
 -- we assume our translation respects this
 -- NB: we deviate from ABS by not providing ordering of future-refs
-type Fut a = MVar a
+--type Fut a = MVar a
+data Fut a = LocalFut' ProcessId Word (MVar a)
+           | RemoteFut' ProcessId Word ProcessId
 
-instance Show (MVar a) where
+instance Show (Fut a) where
     show _ = "Fut"
+
+instance Eq (Fut a) where
+  LocalFut' _ _ mvar1 == LocalFut' _ _ mvar2 = mvar1 == mvar2
+  RemoteFut' _ _ forwarderPid1 == RemoteFut' _ _ forwarderPid2 = forwarderPid1 == forwarderPid2
+  LocalFut' creatorPid1 counter1 _ == RemoteFut' creatorPid2 counter2 _ = creatorPid1 == creatorPid2 && counter1 == counter2
+  x == y = y == x -- swap args
+
+instance Serializable a => Binary (Fut a) where
+  put (LocalFut' creatorPid counter mvar) = unsafePerformIO $ modifyMVar futureStore' $ \ m -> 
+      case M.lookup (creatorPid,counter) m of
+        Nothing -> do
+          forwarderPid <- forkProcess undefined $ do
+                            res <- liftIO $ readMVar mvar
+                            forever $ do
+                              pid <- expect
+                              send pid res
+          return (m, put creatorPid *> put counter *> put forwarderPid)
+        Just forwarderPid -> return (m, put creatorPid *> put counter *> put forwarderPid)
+  put (RemoteFut' creatorPid counter forwarderPid) = put creatorPid *> put counter *> put forwarderPid
+  get = RemoteFut' <$> get <*> get <*> get
+
+  -- put o@(Obj' _ (Cog' _ _ pid _) counter) = do
+  --   when (processNodeId pid == selfNode) $ 
+  --     (unsafePerformIO (modifyMVar_ objectStore' (pure . M.insert (pid,counter) (AnyObj' o)))) `seq` pure ()
+  --   put pid *> put counter
+  -- get = do
+  --     pid <- get
+  --     counter <- get
+  --     if processNodeId pid == selfNode
+  --       then let m = M.lookup (pid,counter) $ unsafePerformIO (readMVar objectStore')
+  --            in case m of
+  --               -- or use the safer Data.Typeable.cast, or Data.Typeable.eqT
+  --               Just (AnyObj' o) ->  -- unsafePerformIO (print "found foreign") `seq`
+  --                                   pure (unsafeCoerce o :: Obj' a)
+  --               _ -> fail "foreign table lookup fail"
+  --       else pure $ Obj' undefined (Cog' undefined undefined pid undefined) counter
+
+
 
 -- | an object reference is a pair of
 -- 1) a reference to its cog
@@ -36,13 +79,13 @@ data Obj' contents = Obj' (IORef contents) !Cog' Word
 instance Binary (Obj' a) where
   put o@(Obj' _ (Cog' _ _ pid _) counter) = do
     when (processNodeId pid == selfNode) $ 
-      (unsafePerformIO (modifyMVar_ foreignStore' (pure . M.insert (pid,counter) (AnyObj' o)))) `seq` pure ()
+      (unsafePerformIO (modifyMVar_ objectStore' (pure . M.insert (pid,counter) (AnyObj' o)))) `seq` pure ()
     put pid *> put counter
   get = do
       pid <- get
       counter <- get
       if processNodeId pid == selfNode
-        then let m = M.lookup (pid,counter) $ unsafePerformIO (readMVar foreignStore')
+        then let m = M.lookup (pid,counter) $ unsafePerformIO (readMVar objectStore')
              in case m of
                 -- or use the safer Data.Typeable.cast, or Data.Typeable.eqT
                 Just (AnyObj' o) ->  -- unsafePerformIO (print "found foreign") `seq`
@@ -104,7 +147,11 @@ selfNode:: NodeId
 selfNode = NodeId $ encodeEndPointAddress (ip cmdOpt) (port cmdOpt) 0
 
 
-{-# NOINLINE foreignStore' #-}
-foreignStore' :: MVar (M.Map (ProcessId,Word) AnyObj')
-foreignStore' = unsafePerformIO $ newMVar M.empty
+{-# NOINLINE objectStore' #-}
+objectStore' :: MVar (M.Map (ProcessId,Word) AnyObj')
+objectStore' = unsafePerformIO $ newMVar M.empty
 data AnyObj' = forall a. AnyObj' (Obj' a)
+
+{-# NOINLINE futureStore' #-}
+futureStore' :: MVar (M.Map (ProcessId,Word) ProcessId)
+futureStore' = unsafePerformIO $ newMVar M.empty

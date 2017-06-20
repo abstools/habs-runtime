@@ -3,9 +3,8 @@ module ABS.Runtime.Prim
     ( null, nullFuture'
     , suspend, awaitFuture', awaitBool', get
     , awaitFutures'
-    , awaitFutureField', ChangedFuture' (..)
     , new, newlocal', spawn', pid'
-    , sync', (<..>), (<!>), (<!!>), awaitSugar'
+    , sync', (<..>), async', (<!!>)
     , skip, main_is'
     , while, while'
     , (<$!>)
@@ -18,29 +17,28 @@ import ABS.Runtime.Base
 import ABS.Runtime.CmdOpt
 import ABS.Runtime.TQueue (TQueue (..), newTQueueIO, writeTQueue, readTQueue)
 import ABS.Runtime.Extension.Exception hiding (throw, catch)
-import Control.Concurrent (ThreadId, myThreadId, newEmptyMVar, isEmptyMVar, putMVar, readMVar, forkIO, threadDelay)
+import Control.Concurrent (newEmptyMVar, isEmptyMVar, putMVar, readMVar, forkIO, threadDelay)
 import Control.Concurrent.STM (atomically, readTVar, readTVarIO, writeTVar)    
-import Control.Distributed.Process (Process, NodeId(..), ProcessId, Closure, RemoteTable, spawn, spawnLocal, receiveWait, unClosure, match, matchSTM, getSelfPid)
+import Control.Distributed.Process (Process, NodeId(..), ProcessId, Closure, RemoteTable, spawn, spawnLocal, receiveWait, unClosure, match, matchSTM, getSelfPid, send, expect)
 import Control.Distributed.Process.Node ( newLocalNode, initRemoteTable, runProcess)
+import Control.Distributed.Process.Serializable (Serializable)
 import Control.Distributed.Process.Internal.Types (nullProcessId)
 import Network.Transport.TCP (createTransport, defaultTCPParameters, encodeEndPointAddress)
 
 import Control.Monad.Trans.Cont (evalContT, callCC)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.IO.Class (liftIO)
-import Data.IORef (newIORef, readIORef, writeIORef, modifyIORef')
+import Data.IORef (newIORef, readIORef, writeIORef)
 import System.IO.Unsafe (unsafePerformIO)
 
 import Prelude hiding (null)
 import Control.Monad ((<$!>), when, unless, join)
-import Control.Exception (Exception, SomeException, throw, evaluate)
-import Control.Monad.Catch (catch, catches, Handler (..))
+import Control.Exception (throw, evaluate)
+import Control.Monad.Catch (catches, Handler (..))
 import Data.Time.Clock.POSIX (getPOSIXTime) -- for realtime
 import qualified System.Exit (exitFailure)
 import System.IO (hSetBuffering, BufferMode (LineBuffering), hPutStrLn, hPrint, stderr)
 import Data.Ratio (Ratio)
-import Data.Typeable
-import Data.List (delete)
 import System.Random (randomRIO)
 
 
@@ -60,7 +58,10 @@ null = Obj' (unsafePerformIO $ newIORef undefined) -- its object contents
 
 {-# NOINLINE nullFuture' #-}
 nullFuture' :: Fut a
-nullFuture' = unsafePerformIO $ newEmptyMVar
+nullFuture' = unsafePerformIO $ LocalFut' 
+                                (nullProcessId $ NodeId $ encodeEndPointAddress "0.0.0.0" "0" 0)
+                                0
+                                <$> newEmptyMVar
 
 {-# INLINABLE suspend #-}
 -- | Optimized suspend by avoiding capturing current-continuation if the method will be reactivated immediately:
@@ -132,15 +133,24 @@ handlers' = [ Handler $ \ (ex :: AssertionFailed) -> liftIO $ hPrint stderr ex >
 -- 1 awaitBool (x > 2 && y < 4);
 
 {-# INLINABLE awaitFuture' #-}
-awaitFuture' :: Obj' this -> Fut a -> ABS' ()
-awaitFuture' (Obj' _ thisCog@(Cog' _ thisMailBox _ _) _) fut = do
-  empty <- liftIO $ isEmptyMVar fut -- according to ABS' semantics it should continue right away, hence this test.
+awaitFuture' :: Serializable a => Obj' this -> Fut a -> ABS' ()
+awaitFuture' (Obj' _ thisCog@(Cog' _ thisMailBox _ _) _) (LocalFut' _ _ mvar) = do
+  empty <- liftIO $ isEmptyMVar mvar -- according to ABS' semantics it should continue right away, hence this test.
   when empty $
     callCC (\ k -> do
                   _ <- liftIO $ forkIO (do
-                                    _ <- readMVar fut    -- wait for future to be resolved
+                                    _ <- readMVar mvar    -- wait for future to be resolved
                                     atomically $ writeTQueue thisMailBox (k ()))
                   back' thisCog)
+awaitFuture' (Obj' _ thisCog@(Cog' _ thisMailBox _ _) _) (RemoteFut' _ _ pid :: Fut a) =
+  -- deviate from ABS semantics because of not initial polling
+  callCC (\ k -> do
+    _ <- lift $ spawnLocal $ do
+                 self <- getSelfPid
+                 send pid self
+                 _ <- expect :: Process a
+                 liftIO $ atomically $ writeTQueue thisMailBox (k ())
+    back' thisCog)
 
 {-# INLINABLE awaitFutures' #-}
 awaitFutures' :: Obj' this -> [IO Bool] -> IO a -> ABS' ()
@@ -170,30 +180,6 @@ orM (p:ps)      = do
 --          then return True
 --          else anyM p xs
 
-{-# INLINABLE awaitFutureField' #-}
-awaitFutureField' :: Typeable a 
-                  => Obj' this 
-                  -> (([ThreadId] -> [ThreadId]) -> this -> this) 
-                  -> Fut a 
-                  -> ABS' ()
-awaitFutureField' (Obj' this' thisCog@(Cog' _ thisMailBox _ _) _) setter mvar = do
-  empty <- liftIO $ isEmptyMVar mvar -- according to ABS' semantics it should continue right away, hence this test.
-  when empty $
-    callCC (\ k -> do
-                  liftIO $ forkIO (go mvar k) >>= \ tid -> modifyIORef' this' (setter (tid:))
-                  back' thisCog)
-  where
-    go mvar' k = (do
-                    _ <- readMVar mvar'    -- wait for future to be resolved
-                    tid <- myThreadId
-                    atomically $ writeTQueue thisMailBox (do
-                        liftIO $ modifyIORef' this' (setter (delete tid))
-                        k ())
-                 ) `catch` (\ (ChangedFuture' mvar'') -> go mvar'' k)
-
-data ChangedFuture' a = ChangedFuture' (Fut a)
-instance Show (ChangedFuture' a) where show _ = "ChangedFuture' exception"
-instance (Typeable a) => Exception (ChangedFuture' a)
 
 {-# INLINABLE awaitBool' #-}
 awaitBool' :: Obj' thisContents -> (thisContents -> Bool) -> ABS' ()
@@ -233,16 +219,18 @@ sync' (Obj' _ (Cog' _ thisCogToken _ _) _) callee@(Obj' _ (Cog' _ calleeCogToken
 (<..>) :: Obj' a -> (Obj' a -> ABS' r) -> ABS' r
 (<..>) obj methodPartiallyApplied = methodPartiallyApplied obj -- it is the reverse application
 
-{-# INLINABLE (<!>) #-}
+{-# INLINABLE async' #-}
 -- | async, unlifted
-(<!>) :: Obj' a -> (Obj' a -> ABS' b) -> IO (Fut b)
-(<!>) obj@(Obj' _ otherCog@(Cog' _ otherMailBox _ _) _) methodPartiallyApplied = do
-  fut <- newEmptyMVar 
+async' :: Obj' this -> Obj' a -> (Obj' a -> ABS' b) -> IO (Fut b)
+async' (Obj' _ (Cog' _ _ thisCogPid thisCogCounter) _) obj@(Obj' _ otherCog@(Cog' _ otherMailBox _ _) _) methodPartiallyApplied = do
+  i <- readIORef thisCogCounter
+  writeIORef thisCogCounter $! i+1
+  mvar <- newEmptyMVar 
   atomically $ writeTQueue otherMailBox (do
                               res <- methodPartiallyApplied obj `catches` handlers'
-                              liftIO $ putMVar fut res      -- method resolves future
+                              liftIO $ putMVar mvar res      -- method resolves future
                               back' otherCog)
-  return fut                                                            
+  return (LocalFut' thisCogPid i mvar)                                                      
 
 
 {-# INLINABLE (<!!>) #-}
@@ -253,25 +241,6 @@ sync' (Obj' _ (Cog' _ thisCogToken _ _) _) callee@(Obj' _ (Cog' _ calleeCogToken
                -- we throw away the result (if we had "destiny" primitive then this optimization could not be easily applied
                (() <$ methodPartiallyApplied obj) `catches` handlers'
                back' otherCog)
-
-{-# INLINABLE awaitSugar' #-}
--- | for await guard sugar
-awaitSugar' :: Obj' this 
-            -> (b -> IO ()) -- ^ LHS 
-            -> Obj' a -- ^ callee
-            -> (Obj' a -> ABS' b) -- ^ method 
-            -> ABS' ()
-awaitSugar' (Obj' _ thisCog@(Cog' _ thisMailBox _ _) _) lhs obj@(Obj' _ otherCog@(Cog' _ otherMailBox _ _) _) methodPartiallyApplied = 
-  callCC (\ k -> do
-    liftIO $ atomically $ writeTQueue otherMailBox (do
-               res <- methodPartiallyApplied obj `catches` handlers'
-               liftIO $ atomically $ writeTQueue thisMailBox (do
-                                                              liftIO $ lhs $! res -- whnf to force the exception at the caller side TODO: to be tested , try also evaluate
-                                                              k () )
-               back' otherCog)
-    back' thisCog)
-
-
 
 
 {-# INLINABLE new #-}
@@ -323,8 +292,12 @@ spawn' dc p = do
 
 {-# INLINE get #-}
 -- | get, unlifted
-get :: Fut b -> IO b
-get fut = readMVar fut >>= evaluate -- forces to whnf, so as to for sure re-raise to the caller in case of exception-inside-future
+get :: Serializable b => Fut b -> Process b
+get (LocalFut' _ _ mvar) = liftIO $ readMVar mvar >>= evaluate -- forces to whnf, so as to for sure re-raise to the caller in case of exception-inside-future
+get (RemoteFut' _ _ pid) = do
+  self <- getSelfPid
+  send pid self
+  expect
 
 
 -- it has to be in IO since it runs the read-obj-attr tests
