@@ -4,7 +4,7 @@ module ABS.Runtime.Prim
     , suspend, awaitFuture', awaitBool', get
     , awaitFutures'
     , new, newlocal', spawn', pid'
-    , sync', (<..>), async', (<!!>), cpForward'
+    , sync', (<..>), async', (<!!>), forwarderProc'
     , skip, main_is'
     , while, while'
     , (<$!>)
@@ -23,6 +23,7 @@ import Control.Distributed.Process (Process, NodeId(..), ProcessId, Closure, Rem
 import Control.Distributed.Process.Node (newLocalNode, initRemoteTable, runProcess)
 import Control.Distributed.Process.Serializable (Serializable, SerializableDict (..))
 import Control.Distributed.Process.Internal.Types (nullProcessId)
+import Control.Distributed.Process.Closure (seqCP, returnCP, sdictUnit)
 import Control.Distributed.Static hiding (initRemoteTable)
 import Data.Rank1Typeable (Typeable, ANY, ANY1, ANY2, ANY3, ANY4)
 import Data.Rank1Dynamic (toDynamic)
@@ -351,6 +352,9 @@ pid' :: Obj' a -> ProcessId
 pid' (Obj' _ (Cog' _ _ pid _) _) = pid
 
 
+forwarderProc' :: Typeable a => Static (SerializableDict a) -> Closure (Process ())
+forwarderProc' dict = cpForward' dict `seqCP` returnCP sdictUnit ()
+
 forward' :: Serializable a => Process a
 forward' = do
   res <- expect
@@ -362,6 +366,8 @@ cpForward' dict = staticClosure (forwardDictStatic `staticApply` dict)
   where
     forwardDictStatic :: Typeable a => Static (SerializableDict a -> Process a)
     forwardDictStatic = staticLabel "$forwardDict"
+
+
 
 
 {-# INLINE main_is' #-}
