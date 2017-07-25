@@ -3,7 +3,7 @@ module ABS.Runtime.Prim
     ( null, nullFuture'
     , suspend, awaitFuture', awaitBool', get
     , awaitFutures'
-    , new, newlocal', spawn', pid'
+    , new, newlocal', spawn', pid', forwarderProc'
     , sync', (<..>), async', (<!!>)
     , skip, main_is'
     , while, while'
@@ -32,7 +32,7 @@ import Data.IORef (newIORef, readIORef, writeIORef)
 import System.IO.Unsafe (unsafePerformIO)
 
 import Prelude hiding (null)
-import Control.Monad ((<$!>), when, unless, join)
+import Control.Monad ((<$!>), when, unless, join, forever)
 import Control.Exception (throw, evaluate)
 import Control.Monad.Catch (catches, Handler (..))
 import Data.Time.Clock.POSIX (getPOSIXTime) -- for realtime
@@ -346,6 +346,11 @@ random i = randomRIO (0, case compare i 0 of
 {-# INLINE pid' #-}
 pid' :: Obj' a -> ProcessId
 pid' (Obj' _ (Cog' _ _ pid _) _) = pid
+
+forwarderProc' :: Serializable a => a -> Process ()
+forwarderProc' (_proxy :: a) = do
+  res <- expect :: Process a
+  forever (expect >>= (`send` res))
 
 {-# INLINE main_is' #-}
 -- | This function takes an ABS'' main function in the module and executes the ABS' program.
