@@ -347,10 +347,11 @@ random i = randomRIO (0, case compare i 0 of
 pid' :: Obj' a -> ProcessId
 pid' (Obj' _ (Cog' _ _ pid _) _) = pid
 
-forwarderProc' :: Serializable a => a -> Process ()
-forwarderProc' (_proxy :: a) = do
-  res <- expect :: Process a
-  forever (expect >>= (`send` res))
+forwarderProc' :: Serializable a => Process a
+forwarderProc' = do
+  res <- expect
+  _ <- forever (expect >>= (`send` res))
+  return res -- dummy statement for typing
 
 {-# INLINE main_is' #-}
 -- | This function takes an ABS'' main function in the module and executes the ABS' program.
