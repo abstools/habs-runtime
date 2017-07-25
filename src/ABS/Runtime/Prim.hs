@@ -347,8 +347,8 @@ random i = randomRIO (0, case compare i 0 of
 pid' :: Obj' a -> ProcessId
 pid' (Obj' _ (Cog' _ _ pid _) _) = pid
 
-forwarderProc' :: Serializable a => Process a
-forwarderProc' = do
+forwarderProc' :: Serializable a => () -> Process a
+forwarderProc' _ = do
   res <- expect
   _ <- forever (expect >>= (`send` res))
   return res -- dummy statement for typing
