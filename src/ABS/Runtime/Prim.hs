@@ -4,7 +4,7 @@ module ABS.Runtime.Prim
     , suspend, awaitFuture', awaitBool', get
     , awaitFutures'
     , new, newlocal', spawn', pid'
-    , sync', (<..>), async', (<!!>), foreverCP
+    , sync', (<..>), async', (<!!>), cpForward'
     , skip, main_is'
     , while, while'
     , (<$!>)
@@ -21,7 +21,7 @@ import Control.Concurrent (newEmptyMVar, isEmptyMVar, putMVar, readMVar, forkIO,
 import Control.Concurrent.STM (atomically, readTVar, readTVarIO, writeTVar)    
 import Control.Distributed.Process (Process, NodeId(..), ProcessId, Closure, RemoteTable, spawn, spawnLocal, receiveWait, unClosure, match, matchSTM, getSelfPid, send, expect)
 import Control.Distributed.Process.Node (newLocalNode, initRemoteTable, runProcess)
-import Control.Distributed.Process.Serializable (Serializable)
+import Control.Distributed.Process.Serializable (Serializable, SerializableDict (..))
 import Control.Distributed.Process.Internal.Types (nullProcessId)
 import Control.Distributed.Static hiding (initRemoteTable)
 import Data.Rank1Typeable (Typeable, ANY, ANY1, ANY2, ANY3, ANY4)
@@ -351,12 +351,18 @@ pid' :: Obj' a -> ProcessId
 pid' (Obj' _ (Cog' _ _ pid _) _) = pid
 
 
--- | (Not quite the) 'CP' version of ('Control.Monad.>>=')
-foreverCP :: Typeable a => Closure (Process a) -> Closure (Process a)
-foreverCP x = foreverProcessStatic `closureApplyStatic` x
+forward' :: Serializable a => Process a
+forward' = do
+  res <- expect
+  _ <- forever (expect >>= (`send` res))
+  return res -- dummy, used for typing
+
+cpForward' :: Typeable a => Static (SerializableDict a) -> Closure (Process a)
+cpForward' dict = staticClosure (forwardDictStatic `staticApply` dict)
   where
-    foreverProcessStatic :: Typeable a => Static (Process a -> Process a)
-    foreverProcessStatic = staticLabel "$foreverProcess"
+    forwardDictStatic :: Typeable a => Static (SerializableDict a -> Process a)
+    forwardDictStatic = staticLabel "$forwardDict"
+
 
 {-# INLINE main_is' #-}
 -- | This function takes an ABS'' main function in the module and executes the ABS' program.
@@ -370,7 +376,8 @@ main_is' allModulesRemoteTables mainABS'  = do
  Right t <- createTransport (ip cmdOpt) (port cmdOpt) defaultTCPParameters
  node <- newLocalNode t 
       (allModulesRemoteTables (
-        registerStatic "$foreverProcess"     (toDynamic (forever :: Process ANY1 -> Process ANY1))
+        --registerStatic "$foreverProcess"     (toDynamic (forever :: Process ANY1 -> Process ANY1))
+        registerStatic "$forwardDict"      (toDynamic (forwardDict       :: SerializableDict ANY -> Process ANY))
           initRemoteTable))
  mb <- newTQueueIO
  st <- newIORef []
@@ -383,3 +390,7 @@ main_is' allModulesRemoteTables mainABS'  = do
         (mainABS' $ Obj' (error "runtime error: the main ABS' block tried to call 'this'") (Cog' st mb self c) 0) `catches` handlers'
         back' (Cog' st mb self c) -- this makes the VM node stay alive (only to be killed with ctrl+c) , -- TODO makes the tests/bench timeout
     _ -> undefined
+
+ where
+    forwardDict :: forall a. SerializableDict a -> Process a
+    forwardDict SerializableDict = forward'
