@@ -49,6 +49,8 @@ library
     -- Cloud-ABS extension
     -- for serializing objects,futures,cogs
     binary,
+    distributed-static,
+    rank1dynamic,
     containers,
     -- for process communication
     distributed-process,

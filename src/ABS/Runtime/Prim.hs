@@ -3,8 +3,8 @@ module ABS.Runtime.Prim
     ( null, nullFuture'
     , suspend, awaitFuture', awaitBool', get
     , awaitFutures'
-    , new, newlocal', spawn', pid', forwarderProc'
-    , sync', (<..>), async', (<!!>)
+    , new, newlocal', spawn', pid'
+    , sync', (<..>), async', (<!!>), foreverCP
     , skip, main_is'
     , while, while'
     , (<$!>)
@@ -20,9 +20,12 @@ import ABS.Runtime.Extension.Exception hiding (throw, catch)
 import Control.Concurrent (newEmptyMVar, isEmptyMVar, putMVar, readMVar, forkIO, threadDelay)
 import Control.Concurrent.STM (atomically, readTVar, readTVarIO, writeTVar)    
 import Control.Distributed.Process (Process, NodeId(..), ProcessId, Closure, RemoteTable, spawn, spawnLocal, receiveWait, unClosure, match, matchSTM, getSelfPid, send, expect)
-import Control.Distributed.Process.Node ( newLocalNode, initRemoteTable, runProcess)
+import Control.Distributed.Process.Node (newLocalNode, initRemoteTable, runProcess)
 import Control.Distributed.Process.Serializable (Serializable)
 import Control.Distributed.Process.Internal.Types (nullProcessId)
+import Control.Distributed.Static hiding (initRemoteTable)
+import Data.Rank1Typeable (Typeable, ANY, ANY1, ANY2, ANY3, ANY4)
+import Data.Rank1Dynamic (toDynamic)
 import Network.Transport.TCP (createTransport, defaultTCPParameters, encodeEndPointAddress)
 
 import Control.Monad.Trans.Cont (evalContT, callCC)
@@ -347,11 +350,13 @@ random i = randomRIO (0, case compare i 0 of
 pid' :: Obj' a -> ProcessId
 pid' (Obj' _ (Cog' _ _ pid _) _) = pid
 
-forwarderProc' :: Serializable a => () -> Process a
-forwarderProc' _ = do
-  res <- expect
-  _ <- forever (expect >>= (`send` res))
-  return res -- dummy statement for typing
+
+-- | (Not quite the) 'CP' version of ('Control.Monad.>>=')
+foreverCP :: Typeable a => Closure (Process a) -> Closure (Process a)
+foreverCP x = foreverProcessStatic `closureApplyStatic` x
+  where
+    foreverProcessStatic :: Typeable a => Static (Process a -> Process a)
+    foreverProcessStatic = staticLabel "$foreverProcess"
 
 {-# INLINE main_is' #-}
 -- | This function takes an ABS'' main function in the module and executes the ABS' program.
@@ -363,7 +368,10 @@ main_is' :: (RemoteTable -> RemoteTable) -> (Obj' contents -> ABS' ()) -> IO ()
 main_is' allModulesRemoteTables mainABS'  = do
  hSetBuffering stderr LineBuffering
  Right t <- createTransport (ip cmdOpt) (port cmdOpt) defaultTCPParameters
- node <- newLocalNode t (allModulesRemoteTables initRemoteTable)
+ node <- newLocalNode t 
+      (allModulesRemoteTables (
+        registerStatic "$foreverProcess"     (toDynamic (forever :: Process ANY1 -> Process ANY1))
+          initRemoteTable))
  mb <- newTQueueIO
  st <- newIORef []
  c <- newIORef 2
