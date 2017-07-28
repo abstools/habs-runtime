@@ -8,6 +8,7 @@ module ABS.Runtime.Prim
     , skip, main_is'
     , while, while'
     , (<$!>)
+    , back' -- exposed in the cloud runtime because it is used by codegen for the remotable "wrappers"
     -- * primitives for soft-realtime extension
     , now, duration, awaitDuration'
     , random
