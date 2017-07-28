@@ -56,14 +56,14 @@ null :: Obj' Null'
 null = Obj' (unsafePerformIO $ newIORef undefined) -- its object contents
             (Cog' (throw NullException) 
                   (throw NullException) 
-                  (nullProcessId $ NodeId $ encodeEndPointAddress "0.0.0.0" "0" 0)
+                  (nullProcessId . NodeId $ encodeEndPointAddress "0.0.0.0" "0" 0)
                   (throw NullException)) -- its COG
             0
 
 {-# NOINLINE nullFuture' #-}
 nullFuture' :: Fut a
 nullFuture' = unsafePerformIO $ LocalFut' 
-                                (nullProcessId $ NodeId $ encodeEndPointAddress "0.0.0.0" "0" 0)
+                                (nullProcessId . NodeId $ encodeEndPointAddress "0.0.0.0" "0" 0)
                                 0
                                 <$> newEmptyMVar
 
@@ -81,7 +81,7 @@ back' :: Cog' -> ABS' ()
 back' (Cog' thisSleepTable thisMailBox _ _) = do
   (mwoken, st') <- liftIO $ findWoken =<< readIORef thisSleepTable                                                 
   case mwoken of
-    Nothing -> join $ lift $ receiveWait
+    Nothing -> join . lift $ receiveWait
       [ match unClosure
       , matchSTM (readTQueue thisMailBox) pure
       ] 
@@ -91,16 +91,16 @@ back' (Cog' thisSleepTable thisMailBox _ _) = do
 handlers' :: [Handler ABS' a]
 handlers' = [ Handler $ \ (ex :: AssertionFailed) -> liftIO $ hPrint stderr ex >> System.Exit.exitFailure
             , Handler $ \ (ex :: PatternMatchFail) -> do
-                                          when (trace_exceptions cmdOpt) (liftIO $ hPutStrLn stderr $ "Process died upon Uncaught-Exception: " ++ show ex)
+                                          when (trace_exceptions cmdOpt) (liftIO . hPutStrLn stderr $ "Process died upon Uncaught-Exception: " ++ show ex)
                                           return $ throw ex  -- rethrows it inside the future-"box"
             , Handler $ \ (ex :: RecSelError) -> do
-                                          when (trace_exceptions cmdOpt) (liftIO $ hPutStrLn stderr $ "Process died upon Uncaught-Exception: " ++ show ex)
+                                          when (trace_exceptions cmdOpt) (liftIO . hPutStrLn stderr $ "Process died upon Uncaught-Exception: " ++ show ex)
                                           return $ throw ex  -- rethrows it inside the future-"box"
             , Handler $ \ DivideByZero -> do
-                                          when (trace_exceptions cmdOpt) (liftIO $ hPutStrLn stderr $ "Process died upon Uncaught-Exception: " ++ show DivideByZero)
+                                          when (trace_exceptions cmdOpt) (liftIO . hPutStrLn stderr $ "Process died upon Uncaught-Exception: " ++ show DivideByZero)
                                           return $ throw DivideByZero  -- rethrows it inside the future-"box"
             , Handler $ \ (ex :: ABSException') -> do
-                                          when (trace_exceptions cmdOpt) (liftIO $ hPutStrLn stderr $ "Process died upon Uncaught-Exception: " ++ show ex)
+                                          when (trace_exceptions cmdOpt) (liftIO . hPutStrLn stderr $ "Process died upon Uncaught-Exception: " ++ show ex)
                                           return $ throw ex  -- rethrows it inside the future-"box"                                       
             ]
 
@@ -124,11 +124,11 @@ awaitFuture' (Obj' _ thisCog@(Cog' _ thisMailBox _ _) _) (LocalFut' _ _ mvar) = 
 awaitFuture' (Obj' _ thisCog@(Cog' _ thisMailBox _ _) _) (RemoteFut' _ _ pid :: Fut a) =
   -- deviate from ABS semantics because of not initial polling
   callCC (\ k -> do
-    _ <- lift $ spawnLocal $ do
+    _ <- lift . spawnLocal $ do
                  self <- getSelfPid
                  send pid self
                  _ <- expect :: Process a
-                 liftIO $ atomically $ writeTQueue thisMailBox (k ())
+                 liftIO . atomically $ writeTQueue thisMailBox (k ())
     back' thisCog)
 
 {-# INLINABLE awaitFutures' #-}
@@ -167,10 +167,10 @@ awaitBool' (Obj' thisContentsRef (Cog' thisSleepTable thisMailBox _ _) _) testFu
   unless (testFun thisContents) $
     callCC (\ k -> do
                        (mwoken, st') <- liftIO $ findWoken =<< readIORef thisSleepTable
-                       liftIO $ writeIORef thisSleepTable $ 
+                       liftIO . writeIORef thisSleepTable $ 
                                   (testFun <$> readIORef thisContentsRef, k ()) : st' -- append failed await, maybe force like modifyIORef?
                        case mwoken of
-                         Nothing -> join $ lift $ receiveWait
+                         Nothing -> join . lift $ receiveWait
                                       [ match unClosure
                                       , matchSTM (readTQueue thisMailBox) pure
                                       ]
@@ -183,7 +183,7 @@ awaitDuration' :: Obj' this -> Ratio Int -> Ratio Int -> ABS' ()
 awaitDuration' (Obj' _ thisCog@(Cog' _ thisMailBox _ _) _) tmin _tmax = 
   callCC (\ k -> do
                   _ <- liftIO $ forkIO (do
-                                    threadDelay $ truncate $ tmin * 1000000 -- seconds to microseconds
+                                    threadDelay . truncate $ tmin * 1000000 -- seconds to microseconds
                                     atomically $ writeTQueue thisMailBox (k ()))
                   back' thisCog)
 
@@ -313,7 +313,7 @@ now = getPOSIXTime
 {-# INLINE duration #-}
 -- | in seconds, ignores second argument tmax
 duration :: Ratio Int -> Ratio Int -> IO ()
-duration tmin _tmax = threadDelay $ truncate $ tmin * 1000000
+duration tmin _tmax = threadDelay . truncate $ tmin * 1000000
 
 
 {-# INLINE random #-}
