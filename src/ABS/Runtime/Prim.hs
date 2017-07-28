@@ -15,10 +15,10 @@ module ABS.Runtime.Prim
 
 import ABS.Runtime.Base
 import ABS.Runtime.CmdOpt
-import ABS.Runtime.TQueue (TQueue (..), newTQueueIO, writeTQueue, readTQueue)
+import Control.Concurrent.STM.TQueue (newTQueueIO, writeTQueue, readTQueue)
 import ABS.Runtime.Extension.Exception hiding (throw, catch)
 import Control.Concurrent (newEmptyMVar, isEmptyMVar, putMVar, readMVar, forkIO, threadDelay)
-import Control.Concurrent.STM (atomically, readTVar, readTVarIO, writeTVar)    
+import Control.Concurrent.STM (atomically)    
 import Control.Distributed.Process (Process, NodeId(..), ProcessId, Closure, RemoteTable, spawn, spawnLocal, receiveWait, unClosure, match, matchSTM, getSelfPid, send, expect)
 import Control.Distributed.Process.Node (newLocalNode, initRemoteTable, runProcess)
 import Control.Distributed.Process.Serializable (Serializable, SerializableDict (..))
@@ -68,38 +68,13 @@ nullFuture' = unsafePerformIO $ LocalFut'
                                 <$> newEmptyMVar
 
 {-# INLINABLE suspend #-}
--- | Optimized suspend by avoiding capturing current-continuation if the method will be reactivated immediately:
--- implemented by inlining back' function and using a custom TQueue that exposes the otherwise abstract datatype TQueue.
+-- | For the cloud version of the habs-runtime, we switched to a non-optimized version of suspend, because the extra step of listening to the remote mailbox makes optimized/inlined code much more complicated.
 suspend :: Obj' this -> ABS' ()
-suspend (Obj' _ (Cog' thisSleepTable thisMailBox@(TQueue tread twrite) _ _) _) = do
-  (mwoken, st') <- liftIO $ findWoken =<< readIORef thisSleepTable                                                 
-  case mwoken of
-    Nothing -> do
-      xs <- liftIO $ readTVarIO tread
-      case xs of
-        (k':ks') -> callCC (\ k -> do
-                          liftIO $ do
-                                 atomically $ writeTQueue thisMailBox (k ())
-                                 atomically $ writeTVar tread ks'
-                          k')
-        [] -> do 
-          ys <- liftIO $ readTVarIO twrite
-          case ys of
-            [] -> return ()       -- continue
-            _  -> callCC (\ k -> join $
-                            liftIO $ atomically $ do
-                                 ws <- readTVar twrite
-                                 case reverse (k():ws) of
-                                   [] -> error "readTQueue"
-                                   (z:zs) -> do writeTVar twrite []
-                                                writeTVar tread zs
-                                                return z
-                         )
-    Just woken -> callCC (\ k -> do
-                           liftIO $ do
-                             atomically $ writeTQueue thisMailBox (k ())                
-                             writeIORef thisSleepTable st' -- the sleep-table was modified, so write it back
-                           woken)
+suspend (Obj' _ thisCog@(Cog' _ thisMailBox _ _) _) =
+  callCC (\ k -> do 
+      liftIO . atomically $ writeTQueue thisMailBox (k ())
+      back' thisCog
+    )
 
 {-# INLINE back' #-}
 back' :: Cog' -> ABS' ()
@@ -299,8 +274,7 @@ spawn' dc p = do
 get :: Serializable b => Fut b -> Process b
 get (LocalFut' _ _ mvar) = liftIO $ readMVar mvar >>= evaluate -- forces to whnf, so as to for sure re-raise to the caller in case of exception-inside-future
 get (RemoteFut' _ _ pid) = do
-  self <- getSelfPid
-  send pid self
+  send pid =<< getSelfPid
   expect
 
 

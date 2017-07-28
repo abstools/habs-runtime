@@ -4,7 +4,7 @@ module ABS.Runtime.Base where
 
 import ABS.Runtime.CmdOpt
 import Control.Concurrent.MVar (MVar, newMVar, modifyMVar, modifyMVar_, readMVar) -- futures
-import ABS.Runtime.TQueue (TQueue) -- mailbox
+import Control.Concurrent.STM.TQueue (TQueue) -- mailbox
 import Data.IORef (IORef)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Cont (ContT)

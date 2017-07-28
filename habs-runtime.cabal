@@ -59,9 +59,7 @@ library
     cmdargs
   exposed-modules:
     -- name-clash-avoiding wrapper module used by the codegen 
-    ABS.Runtime,
-    -- exposed, because it is needed by boilerplate CloudHaskell code generation
-    ABS.Runtime.TQueue
+    ABS.Runtime
   other-modules:
     -- data structures used by the Runtime
     ABS.Runtime.Base,
