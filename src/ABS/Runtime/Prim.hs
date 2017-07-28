@@ -92,16 +92,16 @@ handlers' :: [Handler ABS' a]
 handlers' = [ Handler $ \ (ex :: AssertionFailed) -> liftIO $ hPrint stderr ex >> System.Exit.exitFailure
             , Handler $ \ (ex :: PatternMatchFail) -> do
                                           when (trace_exceptions cmdOpt) (liftIO . hPutStrLn stderr $ "Process died upon Uncaught-Exception: " ++ show ex)
-                                          return $ throw ex  -- rethrows it inside the future-"box"
+                                          pure $ throw ex  -- rethrows it inside the future-"box"
             , Handler $ \ (ex :: RecSelError) -> do
                                           when (trace_exceptions cmdOpt) (liftIO . hPutStrLn stderr $ "Process died upon Uncaught-Exception: " ++ show ex)
-                                          return $ throw ex  -- rethrows it inside the future-"box"
+                                          pure $ throw ex  -- rethrows it inside the future-"box"
             , Handler $ \ DivideByZero -> do
                                           when (trace_exceptions cmdOpt) (liftIO . hPutStrLn stderr $ "Process died upon Uncaught-Exception: " ++ show DivideByZero)
-                                          return $ throw DivideByZero  -- rethrows it inside the future-"box"
+                                          pure $ throw DivideByZero  -- rethrows it inside the future-"box"
             , Handler $ \ (ex :: ABSException') -> do
                                           when (trace_exceptions cmdOpt) (liftIO . hPutStrLn stderr $ "Process died upon Uncaught-Exception: " ++ show ex)
-                                          return $ throw ex  -- rethrows it inside the future-"box"                                       
+                                          pure $ throw ex  -- rethrows it inside the future-"box"                                       
             ]
 
 -- Translation-time transformation
@@ -143,11 +143,11 @@ awaitFutures' (Obj' _ thisCog@(Cog' _ thisMailBox _ _) _) pollingTest blockingAc
                   back' thisCog)
 
 orM :: [IO Bool] -> IO Bool
-orM []          = return False
+orM []          = pure False
 orM (p:ps)      = do
         q <- p
         if q
-          then return True
+          then pure True
           else orM ps
 
 ---- taken from package monad-loops
@@ -212,7 +212,7 @@ async' (Obj' _ (Cog' _ _ thisCogPid thisCogCounter) _) obj@(Obj' _ otherCog@(Cog
                               res <- methodPartiallyApplied obj `catches` handlers'
                               liftIO $ putMVar mvar res      -- method resolves future
                               back' otherCog)
-  return (LocalFut' thisCogPid i mvar)                                                      
+  pure (LocalFut' thisCogPid i mvar)                                                      
 
 
 {-# INLINABLE (<!!>) #-}
@@ -246,7 +246,7 @@ new initFun objSmartCon = do
                                             , matchSTM (readTQueue newCogMailBox) pure
                                             ]
                             -- init method exits, does not have to findWoken because there can be no other processes yet
-                return (Obj' newObj'Contents (Cog' newCogSleepTable newCogMailBox newPid newCogCounter) 1)
+                pure (Obj' newObj'Contents (Cog' newCogSleepTable newCogMailBox newPid newCogCounter) 1)
 
 
 {-# INLINABLE newlocal' #-}
@@ -264,7 +264,7 @@ newlocal' (Obj' _ thisCog@(Cog' _ _ _ cogCounter) _) initFun objSmartCon = do
                 -- Safe optimization: we call init directly from here, safe because init cannot yield (has type IO)
                 initFun newObj'
 
-                return newObj'
+                pure newObj'
 {-# INLINE spawn' #-}
 spawn' :: NodeId -> Closure (Process ()) -> Process (Obj' a)
 spawn' dc p = do
@@ -285,9 +285,9 @@ get (RemoteFut' _ _ pid) = do
 findWoken :: SleepTable -> IO (Maybe (ABS' ()), SleepTable)
 findWoken st = go st []
     where
-      go [] rs = return (Nothing, rs)
+      go [] rs = pure (Nothing, rs)
       go (l@(t,k):ls) rs = t >>= \case
-                                    True -> return (Just k, ls ++ rs)
+                                    True -> pure (Just k, ls ++ rs)
                                     False -> go ls (l:rs)
 
 
@@ -295,7 +295,7 @@ findWoken st = go st []
 {-# INLINE skip #-}
 -- | Only only as a showcase. The translator does not translate but __strips__ away skip statements.
 skip :: ABS' ()
-skip = return ()
+skip = pure ()
 
 
 -- | for init
@@ -336,7 +336,7 @@ forward' :: Serializable a => Process a
 forward' = do
   res <- expect
   _ <- forever (expect >>= (`send` res))
-  return res -- dummy, used for typing
+  pure res -- dummy, used for typing
 
 cpForward' :: Typeable a => Static (SerializableDict a) -> Closure (Process a)
 cpForward' dict = staticClosure (forwardDictStatic `staticApply` dict)
@@ -364,7 +364,7 @@ main_is' allModulesRemoteTables mainABS'  = do
           initRemoteTable))
  mb <- newTQueueIO
  st <- newIORef []
- c <- newIORef 2
+ c <- newIORef 1
  runProcess node $ 
   case creator cmdOpt of
     [] -> do
