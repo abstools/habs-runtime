@@ -170,7 +170,10 @@ awaitBool' (Obj' thisContentsRef (Cog' thisSleepTable thisMailBox _ _) _) testFu
                        liftIO $ writeIORef thisSleepTable $ 
                                   (testFun <$> readIORef thisContentsRef, k ()) : st' -- append failed await, maybe force like modifyIORef?
                        case mwoken of
-                         Nothing -> join $ liftIO $ atomically $ readTQueue thisMailBox
+                         Nothing -> join $ lift $ receiveWait
+                                      [ match unClosure
+                                      , matchSTM (readTQueue thisMailBox) pure
+                                      ]
                          Just woken -> woken
                        )
 
