@@ -76,5 +76,6 @@ main = defaultMainWith benchConfig [
 benchConfig :: Config
 benchConfig = defaultConfig {
                 reportFile = Just "dist/bench-future-results.html"
+              , csvFile = Just "dist/bench-future-results.csv"
               -- , timeLimit = 5 -- the time window of successive runs for each benchmark, defaults to 5s per individual benchmark
            }

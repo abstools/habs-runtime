@@ -43,7 +43,6 @@ module ABS.Runtime.TQueue (
         writeTQueue,
         unGetTQueue,
         isEmptyTQueue,
-        isEmptyTQueueIO,
   ) where
 
 import GHC.Conc
@@ -136,18 +135,6 @@ isEmptyTQueue (TQueue read write) = do
   case xs of
     (_:_) -> return False
     [] -> do ys <- readTVar write
-             case ys of
-               [] -> return True
-               _  -> return False
-
-
--- |Returns 'True' if the supplied 'TQueue' is empty.
-isEmptyTQueueIO :: TQueue a -> IO Bool
-isEmptyTQueueIO (TQueue read write) = do
-  xs <- readTVarIO read
-  case xs of
-    (_:_) -> return False
-    [] -> do ys <- readTVarIO write
              case ys of
                [] -> return True
                _  -> return False

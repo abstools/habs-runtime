@@ -291,26 +291,27 @@ main = defaultMainWith benchConfig [
                         , bench "manual-cont-tqueue" $ whnfIO $ main6 2 100 100
                         , bench "our-runtime-tqueue" $ whnfIO $ main7 2 100 100
                         ]
-       , bgroup "4-1" [ bench "proc w cont" $ whnfIO $ main1 4 1 100
-                        , bench "proc wo cont" $ whnfIO $ main2 4 1 100
-                        , bench "cont-chan" $ whnfIO $ main3 4 1 100
-                        , bench "cont-unagi" $ whnfIO $ main4 4 1 100
-                        , bench "cont-tqueue" $ whnfIO $ main5 4 1 100
-                        , bench "manual-cont-tqueue" $ whnfIO $ main6 4 1 100
-                        , bench "our-runtime-tqueue" $ whnfIO $ main7 4 1 100
+       , bgroup "10-1" [ bench "proc w cont" $ whnfIO $ main1 10 1 100
+                        , bench "proc wo cont" $ whnfIO $ main2 10 1 100
+                        , bench "cont-chan" $ whnfIO $ main3 10 1 100
+                        , bench "cont-unagi" $ whnfIO $ main4 10 1 100
+                        , bench "cont-tqueue" $ whnfIO $ main5 10 1 100
+                        , bench "manual-cont-tqueue" $ whnfIO $ main6 10 1 100
+                        , bench "our-runtime-tqueue" $ whnfIO $ main7 10 1 100
                         ]
-       , bgroup "4-100" [ bench "proc w cont" $ whnfIO $ main1 4 100 100
-                        , bench "proc wo cont" $ whnfIO $ main2 4 100 100
-                        , bench "cont-chan" $ whnfIO $ main3 4 100 100
-                        , bench "cont-unagi" $ whnfIO $ main4 4 100 100
-                        , bench "cont-tqueue" $ whnfIO $ main5 4 100 100
-                        , bench "manual-cont-tqueue" $ whnfIO $ main6 4 100 100
-                        , bench "our-runtime-tqueue" $ whnfIO $ main7 4 100 100
-                        ]
+       , bgroup "10-100" [ bench "proc w cont" $ whnfIO $ main1 10 100 100
+                        , bench "proc wo cont" $ whnfIO $ main2 10 100 100
+                        , bench "cont-chan" $ whnfIO $ main3 10 100 100
+                        , bench "cont-unagi" $ whnfIO $ main4 10 100 100
+                        , bench "cont-tqueue" $ whnfIO $ main5 10 100 100
+                        , bench "manual-cont-tqueue" $ whnfIO $ main6 10 100 100
+                        , bench "our-runtime-tqueue" $ whnfIO $ main7 10 100 100
+                        ]   
        ]
 
 benchConfig :: Config
 benchConfig = defaultConfig {
                 reportFile = Just "dist/bench-cog-results.html"
+                , csvFile = Just "dist/bench-cog-results.csv"
               -- , timeLimit = 5 -- the time window of successive runs for each benchmark, defaults to 5s per individual benchmark
            }
