@@ -1,26 +1,35 @@
 {-# LANGUAGE CPP, ScopedTypeVariables, LambdaCase #-}
 module ABS.Runtime.Prim
-    ( null, nullFuture'
-    , suspend, awaitFuture', awaitBool', get
-    , awaitFutures'
-    , awaitFutureField', ChangedFuture' (..)
-    , new, newlocal'
-    , sync', (<..>), (<!>), (<!!>), awaitSugar', awaitSugar''
-    , skip, main_is'
-    , while, while'
-    , (<$!>)
-    -- * primitives for soft-realtime extension
-    , currentms, now, duration, awaitDuration'
-    , random,
-     -- * Lifting ABS pure code to ABS object layer
+  ( 
+  -- * Creating new objects
+  new, newlocal'
+  -- * Synchronous method calling
+  , sync', (<..>)
+  -- * Asynchronous method calling
+  , (<!>), (<!!>), awaitSugar', awaitSugar''
+  -- * Cooperative yielding control
+  , suspend
+  -- * Awaiting on boolean conditions
+  , awaitBool'
+  -- * Awaiting on futures
+  , awaitFuture', awaitFutures', awaitFutureField', ChangedFuture' (..)
+  -- * Blocking on futures
+  , get
+  -- * Primitives for Timed-ABS extension
+  -- | (using a soft-realtime interpretation)
+  , currentms, now, duration, awaitDuration'
+  -- * Lifting ABS pure code to ABS object layer
 
-     -- | Haskell is pure by default. These are necessary functions for lifting pure ABS expressions (of the functional core) to the ABS' object layer (monadic statements).
+  -- | Haskell is pure by default. These are necessary functions for lifting pure ABS expressions (of the functional core) to the ABS' object layer (monadic statements).
 
-     -- ** Haskell's return 
-
-     -- | is an expression taking a pure value and lifting it to the monadic world.
-     return
-    ) where
+  -- | Haskell's return is an expression taking a pure value and lifting it to the monadic world.
+  , return
+  -- * ABS strictness
+  -- | Haskell is lazy be default. We use the HNF-strict version of 'fmap' ('<$>') to strictly pass the arguments to ABS methods and statements
+  , (<$!>)
+  -- * Other
+  , skip, while, while', random, main_is', null, nullFuture',
+  ) where
 
 import ABS.Runtime.Base
 import ABS.Runtime.CmdOpt
@@ -53,9 +62,11 @@ import Control.Concurrent.STM (retry)
 import Control.Concurrent.STM.TVar (TVar, newTVarIO, modifyTVar')
 import Foreign.StablePtr
 {-# NOINLINE __tg #-}
+-- | Not-exported
 __tg :: TVar Int
 __tg = unsafePerformIO $ newTVarIO 0
 
+-- | Not-exported
 forkIO__tg :: IO a -> IO ThreadId
 forkIO__tg action = mask $ \restore -> do
     atomically $ modifyTVar' __tg (+ 1)
@@ -64,6 +75,7 @@ forkIO__tg action = mask $ \restore -> do
 #endif
 
 {-# NOINLINE __startClock #-}
+-- | Not-exported
 __startClock :: TimeSpec
 __startClock = unsafePerformIO $ getTime Monotonic
 
@@ -71,12 +83,17 @@ __startClock = unsafePerformIO $ getTime Monotonic
 -- we do (unsafeCoerce null :: MVar a) == d
 -- this.a = unsafeCoerce (null)
 -- (unsafeCoerce null ::MVar a) == (unsafeCoerce null :: MVar a)
-  
+
+-- | A static heap representation of the null object.
 {-# NOINLINE null #-}
 null :: Obj' Null'
 null = Obj' (unsafePerformIO $ newIORef undefined) -- its object contents
             (Cog (throw NullException) (throw NullException)) -- its COG
 
+-- | The uninitialized future.
+--
+-- Calling Fut<A> f; await f? will deadlock the current process.
+-- Calling Fut<A> f; f.get; will deadlock the whole current-COG.
 {-# NOINLINE nullFuture' #-}
 nullFuture' :: Fut a
 nullFuture' = unsafePerformIO $ newEmptyMVar
@@ -116,6 +133,7 @@ suspend (Obj' _ (Cog thisSleepTable thisMailBox@(TQueue tread twrite))) = do
                            woken)
 
 {-# INLINE back' #-}
+-- | Not-exported
 back' :: Cog -> ABS' ()
 back' (Cog thisSleepTable thisMailBox) = do
   (mwoken, st') <- lift $ findWoken =<< readIORef thisSleepTable                                                 
@@ -124,6 +142,7 @@ back' (Cog thisSleepTable thisMailBox) = do
     Just woken -> do
                 lift $ writeIORef thisSleepTable st' -- the sleep-table was modified, so write it back
                 woken
+-- | Not-exported
 handlers' :: [Handler ABS' a]
 handlers' = [ Handler $ \ (ex :: AssertionFailed) -> lift $ hPrint stderr ex >> System.Exit.exitFailure
             , Handler $ \ (ex :: PatternMatchFail) -> do
@@ -275,7 +294,10 @@ sync' (Obj' _ (Cog _ thisMailBox)) callee@(Obj' _ (Cog _ otherMailBox)) methodPa
                back' otherCog)
 
 {-# INLINABLE awaitSugar' #-}
--- | for await guard sugar
+-- | Specialized (optimized support) for A res = await o!m().
+--
+-- The implementors could instead use a non-specialized version which desugars to
+-- Fut<A> f_fresh = o!m(); await f_fresh; A res = f_fresh.get;
 awaitSugar' :: Obj' this 
             -> (b -> IO ()) -- ^ LHS 
             -> Obj' a -- ^ callee
@@ -293,7 +315,7 @@ awaitSugar' (Obj' _ thisCog@(Cog _ thisMailBox)) lhs obj@(Obj' _ otherCog@(Cog _
 
 
 {-# INLINABLE awaitSugar'' #-}
--- | await guard sugar for tEffExp
+-- | Similar to 'awaitSugar'' but does not have a left-hand side, i.e. is of the form await o!m();. 
 awaitSugar'' :: Obj' this 
             -> Obj' a -- ^ callee
             -> (Obj' a -> ABS' b) -- ^ method 
@@ -308,7 +330,9 @@ awaitSugar'' (Obj' _ thisCog@(Cog _ thisMailBox)) obj@(Obj' _ otherCog@(Cog _ ot
 
 
 {-# INLINABLE new #-}
--- | new, unlifted
+-- | New object inside a newly-creted COG 
+--
+-- unlifted to ABS' monad
 new :: (Obj' a -> IO ()) -> a -> IO (Obj' a)
 new initFun objSmartCon = do
                 -- create the cog
@@ -332,7 +356,9 @@ new initFun objSmartCon = do
 
 
 {-# INLINABLE newlocal' #-}
--- | new local, unlifted
+-- | New object inside the currently-executing COG
+--
+-- unlifted to ABS' monad
 newlocal' :: Obj' this -> (Obj' a -> IO ()) -> a -> IO (Obj' a)
 newlocal' (Obj' _ thisCog) initFun objSmartCon = do
                 -- create the object
@@ -346,12 +372,16 @@ newlocal' (Obj' _ thisCog) initFun objSmartCon = do
 
 
 {-# INLINE get #-}
--- | get, unlifted
+-- | Block until the future has been resolved and try to extract the value.
+-- May re-raise the exception of the original failed future.
+-- unlifted to ABS' monad
 get :: Fut b -> IO b
 get fut = readMVar fut >>= evaluate -- forces to whnf, so as to for sure re-raise to the caller in case of exception-inside-future
 
 
--- it has to be in IO since it runs the read-obj-attr tests
+-- |Not-exported
+-- 
+-- It has to be in IO since it runs the read-obj-attr tests
 findWoken :: SleepTable -> IO (Maybe (ABS' ()), SleepTable)
 findWoken st = go st []
     where
@@ -363,25 +393,29 @@ findWoken st = go st []
 
 
 {-# INLINE skip #-}
--- | Only only as a showcase. The translator does not translate but __strips__ away skip statements.
+-- | Only as a showcase. The translator does not translate but __strips__ away skip statements.
 skip :: ABS' ()
 skip = return ()
 
+-- | The ABS controlow flow. Takes a __mutable__ boolean condition that may contain fields (thus inside IO)
+-- and an ABS block to execute (repeatedly).
+while :: IO Bool -> ABS' () -> ABS' ()
+while predAction loopAction = (`when` (loopAction >> while predAction loopAction)) =<< lift predAction -- else continue
 
--- | for init
+-- | Specialized version of 'while' that is used only inside init blocks.
+--
+-- TODO: This version would be unnecessary if the 'while' was abstracted over any (MonadIO a)
 while' :: IO Bool -> IO () -> IO ()
 while' predAction loopAction = (`when` (loopAction >> while' predAction loopAction)) =<< predAction -- else continue
 
-while :: IO Bool -> ABS' () -> ABS' ()
-while predAction loopAction = (`when` (loopAction >> while predAction loopAction)) =<< lift predAction -- else continue
- 
-
 
 {-# INLINE currentms #-}
+-- | Not much used. Baggage from the standard ABS library (abslang.abs)
 currentms :: IO (Ratio Int)
 currentms = (/ 1000000) . fromIntegral . toNanoSecs <$> getTime Monotonic
 
 {-# INLINE now #-}
+-- | Returns the current time of the real-time clock.
 now :: IO TimeSpec
 now = subtract __startClock <$> getTime Monotonic
 
@@ -396,7 +430,7 @@ duration tmin _tmax = threadDelay $ truncate $ tmin * fromIntegral (fst (unit_ti
 
 
 {-# INLINE random #-}
--- | Note: this is multicore-safe but not multicore-scalable, because it uses underneath atomicModifyIORef
+-- | Note: this is multicore-safe (thread-safe) but not multicore-scalable, because it uses underneath atomicModifyIORef
 random :: Int -> IO Int
 random i = randomRIO (0, case compare i 0 of
                             GT -> i-1

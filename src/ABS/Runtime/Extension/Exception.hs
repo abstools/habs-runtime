@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleInstances, ExistentialQuantification #-}
+-- | ABS extension for exception support
 module ABS.Runtime.Extension.Exception 
-    ( -- | the ABS commands in code generation
-      throw, catch, Handler'(..), finally
+    ( throw, catch, Handler'(..), finally
     -- | Same exceptions as Haskell's, so import them rather than redefining.
     -- This has the benefit of catching exceptions from the FFI
     , PatternMatchFail (..), RecSelError (..), ArithException (DivideByZero), AssertionFailed (..)
@@ -17,6 +17,7 @@ import Control.Exception (PatternMatchFail (..), RecSelError (..), ArithExceptio
 import Data.Typeable (cast)
 
 {-# INLINE throw #-}
+-- | Throws the given exception. Can be used unlike Haskell only in ABS stateful code.
 throw :: (Control.Monad.Catch.MonadThrow m , Control.Monad.Catch.Exception e) => e -> m a 
 throw = Control.Monad.Catch.throwM
 
